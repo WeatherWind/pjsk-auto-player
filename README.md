@@ -377,6 +377,37 @@ python main.py profiles                      # 列出配置档案
 python main.py -c config2.yaml start         # 指定配置文件
 ```
 
+## 📦 打包成可执行文件
+
+像 MAA 一样分发单文件可执行, 无需安装 Python:
+
+### 本地打包
+
+```bash
+pip install pyinstaller
+./scripts/build.sh            # macOS
+./scripts/build.sh windows    # Windows (需在 Windows 上运行)
+./scripts/build.sh linux      # Linux (需在 Linux 上运行)
+```
+
+输出在 `dist/` 目录, 单文件可直接运行:
+
+```bash
+./dist/pjsk-auto-player-macos start
+./dist/pjsk-auto-player-macos auto -n 10
+```
+
+### 自动构建 (GitHub Actions)
+
+每次推送 `v*` tag 到 GitHub 时, CI 自动构建三平台可执行并发布到 Releases:
+
+```bash
+git tag v3.2.0
+git push origin main --tags
+```
+
+前往 https://github.com/WeatherWind/pjsk-auto-player/releases 下载。
+
 ---
 
 ## 架构
@@ -385,17 +416,25 @@ python main.py -c config2.yaml start         # 指定配置文件
 pjsk-auto-player/
 ├── main.py                 # CLI 入口 + 配置管理
 ├── pipeline.py             # Pipeline 任务引擎 (v3.0.0)
-├── adb_controller.py       # ADB/scrcpy 控制器
+├── adb_controller.py       # ADB/scrcpy/minitouch 控制器
 ├── scrcpy_controller.py    # scrcpy 视频流后端
 ├── screen_analyzer.py      # 画面分析 + 结算检测
 ├── auto_play.py            # 打歌引擎 + 冲榜模式
+├── ocr_reader.py           # OCR 积分读取 (v3.1.0)
+├── web_dashboard.py        # Web 仪表盘 (v3.2.0)
 ├── config.yaml             # 配置文件
 ├── requirements.txt        # Python 依赖
 ├── VERSION                 # 版本号
 ├── README.md               # 本文件
+├── build.spec              # PyInstaller 打包配置
+├── .github/workflows/      # GitHub Actions 自动构建
+│   └── build.yml
+├── scripts/
+│   └── build.sh            # 本地打包脚本
 ├── tasks/
 │   └── pipeline.json       # 冲榜流水线任务定义
 ├── templates/              # 模板图片目录
+├── bin/minitouch/          # minitouch 二进制 (自动下载)
 └── profiles/               # 配置档案目录
 ```
 

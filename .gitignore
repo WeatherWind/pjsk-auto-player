@@ -27,4 +27,11 @@ Thumbs.db
 *.jpg
 *.jpeg
 *.bmp
+.batch_stats.json
+.batch_action.json
 calibration_*.json
+
+# Build artifacts
+dist/
+build/
+*.spec
