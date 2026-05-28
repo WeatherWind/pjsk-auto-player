@@ -14,6 +14,8 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from scene_classifier import SceneClassifier, SceneType
+
 logger = logging.getLogger("pjsk_analyzer")
 
 
@@ -102,6 +104,18 @@ class ScreenAnalyzer:
         # 用于预测引擎: 历史 note 位置追踪
         self._note_tracks = {}  # lane -> [(y, timestamp), ...]
 
+        # 快速场景分类器 (ALAS 启发)
+        self._scene_classifier = SceneClassifier(config)
+        self._last_scene = SceneType.UNKNOWN
+
+        # 画面捕获优化器
+        self._capture_opt = None
+        try:
+            from capture_optimizer import CaptureOptimizer
+            self._capture_opt = CaptureOptimizer(config)
+        except ImportError:
+            pass
+
         # 调试输出
         self.debug_dir = config.get("debug", {}).get("debug_dir", "debug_output")
         self.save_debug = config.get("debug", {}).get("save_debug_frames", False)
@@ -131,17 +145,28 @@ class ScreenAnalyzer:
             self.screen_h = h
             self._recalc_coords()
 
-        # 判断是否在游戏中
-        game = self._is_game_screen(frame)
-        result = self._is_result_screen(frame)
+        # 快速场景分类 (<1ms) — 作为预过滤器
+        scene = self._scene_classifier.classify(frame)
+        self._last_scene = scene
 
-        if result:
+        if scene == SceneType.LOADING or scene == SceneType.TRANSITION:
+            # 加载/过渡: 快速返回, 不做 note 检测
+            return state
+
+        if scene == SceneType.RESULT:
             state.in_result = True
             return state
 
-        if not game:
+        if scene == SceneType.MENU:
             state.in_menu = True
             return state
+
+        if scene != SceneType.GAME:
+            # UNKNOWN: 使用旧方法作为备选
+            game = self._is_game_screen(frame)
+            if not game:
+                state.in_menu = True
+                return state
 
         state.in_game = True
         now = time.time()

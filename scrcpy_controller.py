@@ -1,17 +1,24 @@
 """
-scrcpy 视频流后端 —— 通过 scrcpy 获取手机屏幕的高帧率视频流。
+scrcpy 视频流后端 —— 通过 PPM 格式从 scrcpy 获取高帧率手机画面。
+
+原理:
+  scrcpy --output-format=ppm 将手机屏幕以 PPM (便携像素图) 格式
+  持续输出到 stdout。每帧包含: header + RGB 像素数据。
+  OpenCV 可以直接解码 PPM 格式。
+
+  相比 ADB screencap (5-15 FPS), 通过 scrcpy 可获得 30-60 FPS,
+  是打歌自动化的关键性能提升。
 
 需要安装 scrcpy:
   - macOS: brew install scrcpy
-  - Windows: scoop install scrcpy 或 winget install scrcpy
+  - Windows: scoop install scrcpy
   - Linux: apt install scrcpy
-
-依赖: numpy, opencv-python (已包含在 requirements.txt)
 """
 
 import logging
-import subprocess
 import os
+import struct
+import subprocess
 import sys
 import threading
 import time
@@ -24,15 +31,15 @@ logger = logging.getLogger("pjsk_scrcpy")
 
 class ScrcpyController:
     """
-    scrcpy 视频流控制器。
+    scrcpy 视频流控制器 (PPM 模式)。
 
-    启动 scrcpy 进程并通过管道读取视频帧。
+    启动 scrcpy 进程并通过 stdout 持续读取 PPM 格式的视频帧。
     提供 get_frame() 方法供 ADBController 调用。
     """
 
     def __init__(self, config: dict):
-        self.cfg = config["scrcpy"]
-        self.serial = config["adb"].get("device_serial", "")
+        self.cfg = config.get("scrcpy", {})
+        self.serial = config.get("adb", {}).get("device_serial", "")
         self.executable = self._find_scrcpy()
 
         self._process: Optional[subprocess.Popen] = None
@@ -44,6 +51,14 @@ class ScrcpyController:
         self._fps = 0.0
         self._last_fps_time = time.time()
 
+        # PPM 解析状态
+        self._buffer = b""
+        self._header_done = False
+        self._ppm_width = 0
+        self._ppm_height = 0
+        self._ppm_data_size = 0
+        self._state = "header"  # header → data
+
     def _find_scrcpy(self) -> str:
         """查找 scrcpy 可执行文件。"""
         exe = self.cfg.get("executable", "scrcpy")
@@ -51,59 +66,54 @@ class ScrcpyController:
             return exe
         which_cmd = "where" if sys.platform == "win32" else "which"
         try:
-            subprocess.run(
-                [which_cmd, exe],
-                capture_output=True, check=True,
-            )
+            subprocess.run([which_cmd, exe], capture_output=True, check=True)
             logger.info(f"scrcpy 已找到: {exe}")
             return exe
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error(
-                f"'{exe}' 未在 PATH 中找到。"
-                "请安装 scrcpy: brew install scrcpy (macOS), "
-                "scoop install scrcpy (Windows), apt install scrcpy (Linux)"
+                f"'{exe}' 未在 PATH 中。请安装 scrcpy"
             )
             return exe
 
     def start(self) -> bool:
-        """启动 scrcpy 视频流。返回是否成功。"""
+        """启动 scrcpy PPM 视频流。返回是否成功。"""
         if self._running:
             return True
 
-        max_fps = self.cfg.get("max_fps", 30)
+        max_fps = self.cfg.get("max_fps", 60)
         bit_rate = self.cfg.get("bit_rate", 8000000)
         scale = self.cfg.get("scale", 0.5)
 
-        # 构造 scrcpy 参数
+        # PPM 模式: 输出原始像素数据, 无需编解码
         cmd = [self.executable]
 
-        # 设备序列号
         if self.serial:
             cmd += ["-s", self.serial]
 
-        # 不显示窗口、不控制、只输出视频
+        # --no-window: 不显示窗口
+        # --no-control: 不处理输入
+        # --output-format=ppm: 输出 PPM 格式 (关键!)
+        # --max-fps: 限制帧率
         cmd += [
             "--no-window",
             "--no-control",
-            "--max-size", str(int(1080 * scale)),
+            "--output-format=ppm",
             "--max-fps", str(max_fps),
-            "--video-codec", "h264",
+            "--max-size", str(int(1080 * scale)),
             "--video-bit-rate", str(bit_rate),
-            "--output-format", "h264",
-            "--print-fps",
         ]
 
-        logger.info(f"启动 scrcpy: {' '.join(cmd)}")
+        logger.info(f"启动 scrcpy PPM 流: max_fps={max_fps}, scale={scale}")
 
         try:
             self._process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0,
+                stderr=subprocess.DEVNULL,
+                bufsize=0,  # 无缓冲
             )
         except FileNotFoundError:
-            logger.error("scrcpy 未安装或未在 PATH 中")
+            logger.error("scrcpy 未安装")
             return False
         except Exception as e:
             logger.error(f"启动 scrcpy 失败: {e}")
@@ -113,53 +123,103 @@ class ScrcpyController:
         self._reader_thread = threading.Thread(
             target=self._read_loop,
             daemon=True,
-            name="scrcpy-reader"
+            name="scrcpy-ppm-reader"
         )
         self._reader_thread.start()
 
-        # 等待第一帧
-        for _ in range(50):
-            time.sleep(0.02)  # 最多等 1 秒
-            if self._latest_frame is not None:
-                h, w = self._latest_frame.shape[:2]
-                logger.info(f"scrcpy 已启动, 首帧: {w}x{h}")
-                return True
+        # 等待首帧
+        for _ in range(100):
+            time.sleep(0.01)
+            with self._lock:
+                if self._latest_frame is not None:
+                    h, w = self._latest_frame.shape[:2]
+                    logger.info(f"scrcpy PPM 已启动: {w}x{h} @ {max_fps}FPS")
+                    return True
 
-        logger.warning("scrcpy 启动超时 (未收到视频帧)")
+        logger.warning("scrcpy PPM 启动超时 (未收到帧)")
         self.stop()
         return False
 
     def _read_loop(self):
         """
-        后台线程: 持续读取 scrcpy 输出中的 H.264 帧。
+        后台线程: 读取 scrcpy stdout 的 PPM 数据流。
 
-        scrcpy 输出 H.264 原始码流, 我们通过 OpenCV 的 VideoCapture
-        或手动解析 NAL 单元来提取帧。
+        PPM 格式:
+          Header: "P6\\n<width> <height>\\n255\\n"
+          Data:   width × height × 3 bytes (RGB)
         """
-        import cv2
-
-        buffer = b""
-        # 用 4 字节 NAL 起始码 (0x00 0x00 0x00 0x01) 分割帧
-        nal_start = b"\x00\x00\x00\x01"
-        nal_start3 = b"\x00\x00\x01"  # 某些设备用 3 字节
+        self._buffer = b""
+        self._state = "header"
 
         while self._running and self._process and self._process.stdout:
             try:
-                chunk = self._process.stdout.read(4096)
+                chunk = self._process.stdout.read(65536)
             except Exception:
                 break
 
             if not chunk:
-                logger.info("scrcpy 视频流已结束")
+                logger.info("scrcpy PPM 流结束")
                 break
 
-            buffer += chunk
+            self._buffer += chunk
+            self._parse_buffer()
 
-            # 尝试解码为图像
-            frame = self._decode_h264_frame(buffer)
-            if frame is not None:
+        logger.info("scrcpy PPM 读取线程已退出")
+
+    def _parse_buffer(self):
+        """从缓冲区解析 PPM 帧。"""
+        while True:
+            if self._state == "header":
+                # 找 header 结束标记 "\n" (P6 后的第二个换行)
+                # Header 格式: "P6\nW H\n255\n"
+                first_nl = self._buffer.find(b"\n")
+                if first_nl < 0:
+                    break
+                # 跳过 "P6\n"
+                rest = self._buffer[first_nl + 1:]
+                second_nl = rest.find(b"\n")
+                if second_nl < 0:
+                    break
+
+                # 解析 "W H"
+                dims = rest[:second_nl].decode().strip()
+                parts = dims.split()
+                if len(parts) >= 2:
+                    try:
+                        self._ppm_width = int(parts[0])
+                        self._ppm_height = int(parts[1])
+                    except ValueError:
+                        # 可能包含 "255" 行, 继续解析
+                        pass
+
+                # 跳过 "255\n" (或数值行)
+                remaining = rest[second_nl + 1:]
+                third_nl = remaining.find(b"\n")
+                if third_nl < 0:
+                    break
+
+                # 现在 data 从第三个换行后开始
+                data_start = first_nl + 1 + second_nl + 1 + third_nl + 1
+                self._ppm_data_size = self._ppm_width * self._ppm_height * 3
+                self._state = "data"
+                # 截断到 data 开始位置
+                self._buffer = self._buffer[data_start:]
+
+            if self._state == "data":
+                if len(self._buffer) < self._ppm_data_size:
+                    break  # 数据还不够
+
+                # 取出一帧
+                frame_data = self._buffer[:self._ppm_data_size]
+
+                # PPM 是 RGB, OpenCV 需要 BGR — 转换
+                rgb = np.frombuffer(frame_data, dtype=np.uint8).reshape(
+                    self._ppm_height, self._ppm_width, 3
+                )
+                bgr = rgb[:, :, ::-1]  # RGB → BGR
+
                 with self._lock:
-                    self._latest_frame = frame
+                    self._latest_frame = bgr
                     self._frame_count += 1
 
                     # FPS 统计
@@ -169,54 +229,27 @@ class ScrcpyController:
                         self._frame_count = 0
                         self._last_fps_time = now
 
-                # 清空 buffer (只保留可能跨块的部分)
-                # 对于实时流, 丢弃已处理的 buffer
-                if len(buffer) > 65536:
-                    buffer = b""
+                # 移除已处理的数据, 保留可能的下一帧头部
+                self._buffer = self._buffer[self._ppm_data_size:]
+                self._state = "header"
 
-        logger.info("scrcpy 读取线程已退出")
+                # 继续循环, 看看 buffer 里是否已经有下一帧
+                continue
 
-    def _decode_h264_frame(self, data: bytes) -> Optional[np.ndarray]:
-        """尝试从 H.264 数据解码为一帧图像。"""
-        import cv2
-
-        try:
-            # 用 OpenCV 的 imdecode 尝试直接从内存解码
-            # H.264 原始码流需要封装为 AVI 或类似格式
-            # 另一种方法: 用 cv2.VideoCapture 从管道读取
-
-            # 方法: 找到 I 帧或 P 帧的起始码
-            # 简单尝试: 检查是否有完整的 H.264 NAL 单元
-            # 这里使用更可靠的方法: 通过临时文件用 ffmpeg 或直接 cv2
-
-            # 实际上, scrcpy 输出的 H.264 流不能直接用 imdecode 解码,
-            # 需要用 ffmpeg 或 cv2.VideoCapture("pipe:") 来读取。
-            # 但对于本项目来说, 更实用的方案是用 cv2.VideoCapture
-            # 通过命名管道或内存缓冲区来解码。
-
-            # 替代方案: 如果解码失败, 回退到简单方法:
-            # 检查是否有足够的数据, 尝试找到关键帧
-
-            # 最简单的检测: 直接返回 None 表示无法解码
-            # (让上层回退到 ADB screencap)
-            pass
-        except Exception:
-            pass
-
-        return None  # 本方法暂不实现 H.264 硬解
+            break  # 不应到达这里
 
     def get_frame(self) -> Optional[np.ndarray]:
-        """获取最新的视频帧。"""
+        """获取最新视频帧 (BGR 格式)。"""
         with self._lock:
             return self._latest_frame.copy() if self._latest_frame is not None else None
 
     def get_fps(self) -> float:
-        """获取当前估算的 FPS。"""
+        """获取当前 FPS。"""
         with self._lock:
             return self._fps
 
     def stop(self):
-        """停止 scrcpy 进程。"""
+        """关闭 scrcpy 进程。"""
         self._running = False
         if self._process:
             try:
@@ -228,28 +261,4 @@ class ScrcpyController:
                 except Exception:
                     pass
             self._process = None
-        self._reader_thread = None
-        logger.info("scrcpy 已停止")
-
-
-# ──────────────────────────────────────────
-# 简易 scrcpy 后端 (通过 ADB screencap 模拟)
-# 实际项目中建议用 cv2.VideoCapture 连接 scrcpy 的管道
-# 或使用 python-scrcpy 库
-# ──────────────────────────────────────────
-
-def create_scrcpy_capture(config: dict):
-    """
-    工厂函数: 尝试创建 scrcpy 后端, 失败则返回 None。
-    
-    实际使用中, 建议安装 python-scrcpy 库:
-    pip install python-scrcpy
-    
-    或通过 scrcpy --no-window --output-format=ppm 输出 PPM 格式
-    用 cv2.imdecode 逐帧读取。
-    """
-    try:
-        return ScrcpyController(config)
-    except Exception as e:
-        logger.warning(f"创建 scrcpy 后端失败: {e}")
-        return None
+        logger.info("scrcpy PPM 已停止")
