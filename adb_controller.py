@@ -1,5 +1,10 @@
 """
-ADB 控制器 —— 通过 ADB 连接安卓手机, 完成截图、触摸操作。
+ADB 控制器 —— 通过 ADB / scrcpy 连接安卓手机, 完成截图、触摸操作。
+
+支持多种后端:
+  - ADB exec-out screencap (默认, 5-15 FPS)
+  - ADB file screencap (兼容模式, 3-8 FPS)
+  - scrcpy 视频流 (可选, 30-60 FPS, 需安装 scrcpy)
 
 Windows / macOS / Linux 通用。
 """
@@ -9,6 +14,7 @@ import time
 import logging
 import os
 import sys
+import threading
 from typing import Optional
 
 import numpy as np
@@ -32,13 +38,10 @@ class ADBController:
     def _find_adb(self) -> str:
         """查找 adb 可执行文件 (Windows 下为 adb.exe)。"""
         exe = self.cfg.get("executable", "adb")
-        # 如果指定了完整路径, 直接使用
         if os.path.isfile(exe):
             return exe
-        # 如果含路径分隔符但不是文件, 可能是命令
         if os.sep in exe or (sys.platform == "win32" and "\\" in exe):
             return exe
-        # 从 PATH 查找
         which_cmd = "where" if sys.platform == "win32" else "which"
         try:
             subprocess.run(
@@ -71,7 +74,7 @@ class ADBController:
         )
         lines = result.stdout.strip().splitlines()
         devices = []
-        for line in lines[1:]:  # 跳过 "List of devices attached"
+        for line in lines[1:]:
             if not line.strip():
                 continue
             parts = line.split("\t")
@@ -99,36 +102,38 @@ class ADBController:
 
     def get_screen_size(self) -> tuple[int, int]:
         """通过 adb shell wm size 获取屏幕尺寸。"""
-        result = subprocess.run(
-            self._adb_cmd("shell", "wm", "size"),
-            capture_output=True, text=True, timeout=10
-        )
-        # 输出如 "Physical size: 1080x2400"
-        for line in result.stdout.splitlines():
-            if "Physical size:" in line or "Override size:" in line:
-                if "x" in line:
-                    size_str = line.split()[-1].strip()
-                    w, h = size_str.split("x")
-                    return int(w), int(h)
-        # 回退到配置值
+        try:
+            result = subprocess.run(
+                self._adb_cmd("shell", "wm", "size"),
+                capture_output=True, text=True, timeout=10
+            )
+            for line in result.stdout.splitlines():
+                if "Physical size:" in line or "Override size:" in line:
+                    if "x" in line:
+                        size_str = line.split()[-1].strip()
+                        w, h = size_str.split("x")
+                        return int(w), int(h)
+        except Exception as e:
+            logger.warning(f"获取屏幕尺寸失败: {e}")
         return self.screen["width"], self.screen["height"]
 
     # ──────────────────────────────────────────
-    # 屏幕截图
+    # 屏幕截图 (后端分发)
     # ──────────────────────────────────────────
 
     def screencap(self) -> Optional[np.ndarray]:
         """
         截取手机屏幕, 返回 BGR numpy 数组 (OpenCV 格式)。
 
-        Returns:
-            BGR 格式的 ndarray, 失败返回 None.
+        自动选择已配置的截图方法。
         """
-        import cv2  # 延迟导入, 避免依赖未安装
+        import cv2  # 延迟导入
 
         method = self.cfg.get("screencap_method", "exec-out")
 
-        if method == "exec-out":
+        if method == "scrcpy":
+            return self._screencap_scrcpy()
+        elif method == "exec-out":
             return self._screencap_execout()
         elif method == "file":
             return self._screencap_file()
@@ -137,7 +142,7 @@ class ADBController:
             return None
 
     def _screencap_execout(self) -> Optional[np.ndarray]:
-        """使用 adb exec-out screencap 直接获取截图 (推荐)。"""
+        """使用 adb exec-out screencap 获取截图 (默认, 5-15 FPS)。"""
         import cv2
 
         try:
@@ -164,33 +169,28 @@ class ADBController:
             return None
 
     def _screencap_file(self) -> Optional[np.ndarray]:
-        """截图保存到设备文件再 pull (兼容性方法)。"""
+        """截图保存到设备文件再 pull (兼容模式, 3-8 FPS)。"""
         import cv2
 
         try:
             ts = int(time.time() * 1000)
             remote_path = f"{self.cfg.get('temp_dir', '/sdcard/')}ss_{ts}.png"
 
-            # 截图保存到设备
             subprocess.run(
                 self._adb_cmd("shell", "screencap", "-p", remote_path),
                 capture_output=True, timeout=15
             )
 
-            # pull 到临时文件
             local_temp = f"__temp_ss_{ts}.png"
             subprocess.run(
                 self._adb_cmd("pull", remote_path, local_temp),
                 capture_output=True, timeout=15
             )
-
-            # 删除设备上的截图
             subprocess.run(
                 self._adb_cmd("shell", "rm", remote_path),
                 capture_output=True, timeout=10
             )
 
-            # 读取
             frame = cv2.imread(local_temp)
             if os.path.exists(local_temp):
                 os.remove(local_temp)
@@ -199,6 +199,42 @@ class ADBController:
         except Exception as e:
             logger.warning(f"screencap_file 异常: {e}")
             return None
+
+    # ──────────────────────────────────────────
+    # scrcpy 后端 (可选, 30-60 FPS)
+    # ──────────────────────────────────────────
+
+    def _screencap_scrcpy(self) -> Optional[np.ndarray]:
+        """
+        通过 scrcpy 视频流获取画面帧。
+
+        scrcpy 提供 ~30 FPS 的视频流, 远快于 ADB screencap。
+        需要安装 scrcpy (https://github.com/Genymobile/scrcpy)。
+        """
+        # 延迟导入 ScrcpyController
+        try:
+            from scrcpy_controller import ScrcpyController
+        except ImportError:
+            logger.error(
+                "scrcpy_controller.py 未找到, 回退到 ADB screencap。"
+                "请确保 scrcpy_controller.py 在项目目录中。"
+            )
+            return self._screencap_execout()
+
+        if not hasattr(self, '_scrcpy_instance'):
+            self._scrcpy_instance = ScrcpyController(self.cfg)
+            if not self._scrcpy_instance.start():
+                logger.error("scrcpy 启动失败, 回退到 ADB screencap")
+                self._scrcpy_instance = None
+                return self._screencap_execout()
+
+        frame = self._scrcpy_instance.get_frame()
+        return frame
+
+    def close_scrcpy(self):
+        """关闭 scrcpy 后端 (如果有启动)。"""
+        if hasattr(self, '_scrcpy_instance') and self._scrcpy_instance:
+            self._scrcpy_instance.stop()
 
     # ──────────────────────────────────────────
     # 触摸操作
@@ -235,10 +271,7 @@ class ADBController:
             return False
 
     def press(self, x: int, y: int, duration_ms: int = 100) -> bool:
-        """
-        长按 (x, y) 位置, 持续 duration_ms 毫秒。
-        内部使用 swipe 实现 (同位置按下+抬起)。
-        """
+        """长按 (x, y) 位置, 持续 duration_ms 毫秒。"""
         return self.swipe(x, y, x, y, duration_ms)
 
     def flick_up(self, x: int, y: int,
@@ -271,23 +304,21 @@ class ADBController:
 
         Returns:
             {
-                "screencap_avg_ms": ...,  # 截图平均耗时
-                "tap_avg_ms": ...,         # 点击平均耗时
-                "total_avg_ms": ...,       # 总延迟
+                "screencap_avg_ms": ...,
+                "tap_avg_ms": ...,
+                "total_avg_ms": ...,
             }
         """
         screencap_times = []
         tap_times = []
 
         for i in range(samples):
-            # 测量 screencap
             t0 = time.perf_counter()
             frame = self.screencap()
             t1 = time.perf_counter()
             if frame is not None:
                 screencap_times.append((t1 - t0) * 1000)
 
-            # 测量 tap (点击屏幕中央)
             cx, cy = self.screen["width"] // 2, self.screen["height"] // 2
             t2 = time.perf_counter()
             self.tap(cx, cy)

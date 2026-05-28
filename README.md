@@ -1,27 +1,54 @@
 # PJSK Auto Player
 
 > 基于 ADB + OpenCV 的 Project Sekai (プロジェクトセカイ) 自动打歌 AP 工具。
-> 在 Windows 电脑上运行, 通过 USB 连接安卓手机, 自动完成打歌操作。
+> 在电脑上运行, 通过 USB 连接安卓手机, 自动完成打歌操作。
+>
+> **核心亮点**: 预测引擎 + 热键控制 + 自动校准 + 配置档案
+
+---
+
+## 🔥 主要特性
+
+| 特性 | 说明 |
+|------|------|
+| **🎯 预测引擎** | 提前检测判定线上方的 note → 追踪滚动速度 → 计算到达时间 → 准时触发。补偿 ADB 的 100-300ms 延迟, 让纯反应式变主动式 |
+| **⌨️ 热键控制** | 运行时无需切窗口: P=暂停, Q=退出, +/-=微调延迟, </>=调阈值 |
+| **📊 实时统计** | 终端显示 FPS、点击数、预测触发数 |
+| **💾 校准自动写入** | `calibrate` 后自动更新 config.yaml, 无需手动复制 |
+| **📁 配置档案** | 不同手机/歌曲可创建独立配置, `--profile` 快速切换 |
+| **📡 scrcpy 后端** | 可选, 安装 scrcpy 后切换 `screencap_method: scrcpy` 即可获得 30-60 FPS |
 
 ## 工作原理
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  ADB 截图     │ ──► │  OpenCV 分析  │ ──► │  ADB 触摸    │
-│  手机画面     │     │  检测note位置  │     │  点击/滑动   │
+│  ADB / scrcpy│ ──► │  OpenCV 分析  │ ──► │  ADB 触摸    │
+│  截图/视频流  │     │  预测引擎     │     │  点击/滑动   │
 └──────────────┘     └──────────────┘     └──────────────┘
-       ↑                      ↑                     ↑
-   ~100ms/帧            ~10ms/帧              ~50ms/次
+       ↑                     ↑                     ↑
+  5-60 FPS            检测+预测+追踪          30-100ms
 ```
 
-核心思路: 通过 ADB 不断截取手机屏幕 → OpenCV 识别判定线上的 note → ADB 发送触摸。
+### 预测引擎 (核心改进)
 
-### 检测策略
+传统的纯反应式方法:
+```
+        note 到达       触发触摸
+  ──────●────────────────●────────→   延迟太大, MISS!
+        ◄── 150ms ──►
+```
 
-- **亮度法 (默认)**: 判定线区域找亮色轮廓 (PJSK 的 note 在深色背景上非常亮)
-- **颜色法**: HSV 颜色空间匹配 note 特征 (白色中心 + 彩色边缘)
-- **Hold 检测**: 同一轨道连续多帧检测到 -> 判定为长按
-- **Flick 检测**: Sobel 梯度分析箭头方向
+预测引擎的工作方式:
+```
+  note 出现    追踪速度    预测到达  准时触发
+  ──●────────────●──────────●────────●──  PERFECT!
+    ◄── 提前发现 ──► ◄── 补偿 ──►
+```
+
+1. 在判定线上方 ~35% 屏幕区域检测刚出现的 note
+2. 跨帧追踪 note 的 Y 位置变化, 计算滚动速度 (px/s)
+3. 根据当前距离和速度, 预测 note 到达判定线的时间
+4. 在需要提前触发的时机 (延迟补偿) 发送触摸指令
 
 ## 环境要求
 
@@ -33,218 +60,254 @@
 | 数据线 | USB 数据线 (建议原装线) |
 | 游戏 | Project Sekai (プロジェクトセカイ) 已安装 |
 
-## 安装步骤
+### 可选: scrcpy (大幅提升帧率)
+
+默认使用 ADB screencap (5-15 FPS)。安装 scrcpy 后可切换到 30-60 FPS:
+
+```bash
+# macOS
+brew install scrcpy
+
+# Windows (scoop)
+scoop install scrcpy
+
+# Windows (winget)
+winget install scrcpy
+
+# Linux
+apt install scrcpy
+```
+
+然后在 `config.yaml` 中设置 `screencap_method: scrcpy`。
+
+## 快速开始
 
 ### 1. 安装 Python
 
 从 [python.org](https://www.python.org/downloads/) 下载 Python 3.8+,
 安装时**务必勾选** "Add Python to PATH"。
 
-验证安装:
-```
+```bash
 python --version
 ```
 
-### 2. 安装 ADB (Android Debug Bridge)
+### 2. 安装 ADB
 
-**方法一: 通过 Android Studio (推荐)**
-- 下载 [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools)
-- 解压到一个目录 (如 `C:\adb`)
-- **把该目录添加到系统 PATH 环境变量**
+下载 [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools),
+解压后把目录添加到系统 PATH。
 
-**方法二: 通过 Scoop (如果安装了 Scoop)**
-```
-scoop install adb
-```
-
-验证安装:
-```
+验证:
+```bash
 adb --version
 ```
 
 ### 3. 手机设置
 
-1. 开启「开发者选项」:
-   - 设置 → 关于手机 → 连续点击「版本号」7 次
-2. 开启「USB 调试」:
-   - 设置 → 开发者选项 → USB 调试 → 开启
-3. 连接电脑:
-   - 用 USB 线连接手机
-   - 手机上弹出授权对话框 → 勾选「一律允许」→ 确定
-4. 验证连接:
-   ```
+1. 设置 → 关于手机 → 连续点击「版本号」7 次 (开启开发者选项)
+2. 设置 → 开发者选项 → USB 调试 → 开启
+3. 用 USB 线连接电脑, 手机上授权「一律允许」
+4. 验证:
+   ```bash
    adb devices
    ```
    应显示 `xxxxxxx device`
 
-> **⚠️ 重要**: 某些手机需要开启「禁止权限监控」或「关闭 MIUI 优化」(小米),
-> 否则 ADB screencap 可能失败。华为/荣耀需要开启「允许 ADB 调试在充电模式修」。
+### 4. 下载项目
 
-### 4. 下载本项目
-
-```
+```bash
 git clone https://github.com/WeatherWind/pjsk-auto-player.git
 cd pjsk-auto-player
 ```
 
-或者直接下载 ZIP 解压。
-
 ### 5. 安装 Python 依赖
 
-```
+```bash
 pip install -r requirements.txt
-```
 
-可选 (用于自动轨道校准):
-```
+# 可选 (用于一键轨道校准):
 pip install scipy
 ```
 
 ## 使用指南
 
-### 第一步: 测试连接
-
-```bash
-python main.py test
-```
-
-正常输出:
-```
-✅ 检测到 1 台设备
-✅ 截图成功: 1080x2400
-   截图延迟: 89.3ms
-   触摸延迟: 42.1ms
-```
-
-### 第二步: 校准参数
-
-**方法 A: 自动校准** (推荐先试这个)
-```bash
-python main.py calibrate
-```
-会测量延迟、截图分析判定线和轨道位置, 输出建议配置。
-
-**方法 B: 交互式校准** (需要电脑有显示器)
-```bash
-python main.py calibrate --interactive
-```
-会打开实时预览窗口:
-- `q` - 退出
-- `r` - 自动重新校准判定线
-- `+/-` - 微调判定线 Y 位置
-- `</>` - 调整亮度阈值
-
-> 校准后请把输出的参数更新到 `config.yaml` 中。
-
-### 第三步: 启动自动打歌
+### 🚀 一键启动
 
 ```bash
 python main.py start
 ```
 
-流程:
-1. 确保手机已连接
-2. 在手机上打开 PJSK, 选好歌曲和难度
-3. 进入打歌准备界面 (选好支援成员, 等待开始)
-4. 在电脑上按 Enter
-5. 程序会自动等待进入打歌画面 → 开始检测 → 自动点击
+运行时热键:
+| 键 | 功能 |
+|----|------|
+| **P** | 暂停/继续 |
+| **Q** | 退出 |
+| **+** / **=** | 延迟补偿 +5ms |
+| **-** / **_** | 延迟补偿 -5ms |
+| **>** / **.** | 亮度阈值 +5 |
+| **<** / **,** | 亮度阈值 -5 |
 
-**按 Ctrl+C 停止。**
+### 📏 一键校准
+
+```bash
+# 自动校准并更新 config.yaml
+python main.py calibrate
+
+# 交互式校准 (需要电脑有显示器)
+python main.py calibrate --interactive
+```
+
+校准内容:
+- ADB 延迟测量 (截图 + 触摸)
+- 判定线 Y 位置 (自动寻找画面特征)
+- 轨道 X 位置 (基于亮度峰值)
+- 校准结果截图保存到 `calibration_result.jpg`
+- ✅ **自动写入 config.yaml**, 无需手动复制
+
+### 📁 配置档案 (Profile)
+
+不同手机或歌曲可以用不同的配置:
+
+```bash
+# 创建配置档案 (校准后自动保存)
+python main.py calibrate --profile phone2
+
+# 使用指定档案启动
+python main.py start --profile phone2
+
+# 列出所有档案
+python main.py profiles
+```
+
+档案保存在 `profiles/` 目录下, 每个档案是一个独立的 YAML 文件。
+
+### 🔍 测试连接
+
+```bash
+# 测试 ADB 连接和延迟
+python main.py test
+
+# 持续测试截图性能
+python main.py test --loop
+```
+
+## 命令行参考
+
+```bash
+python main.py start                         # 启动自动打歌
+python main.py start --profile expert        # 使用 expert 档案
+python main.py calibrate                     # 自动校准参数
+python main.py calibrate -i                  # 交互式校准 (实时预览)
+python main.py calibrate --profile phone2    # 校准时保存到指定档案
+python main.py test                          # 测试连接
+python main.py test --loop                   # 持续测试截图性能
+python main.py profiles                      # 列出配置档案
+python main.py -c my_config.yaml start       # 使用指定配置文件
+```
 
 ## 配置说明
 
-### 屏幕参数 (`screen` 部分)
+详细配置见 `config.yaml`, 主要部分:
 
-最关键的部分, 需要根据你的手机分辨率校准。
+| 配置项 | 说明 |
+|--------|------|
+| `adb.screencap_method` | 截图方式: exec-out (默认), file, scrcpy |
+| `screen.judgment_line_y` | 判定线 Y 位置 (相对比例 0~1) |
+| `screen.note_detect_region_ratio` | 预测引擎检测区域大小 (相对比例) |
+| `detection.brightness.threshold` | 亮度阈值 (越高越严格) |
+| `prediction.enabled` | 是否启用预测引擎 |
+| `timing.latency_compensation_ms` | 延迟补偿 (ms) |
+| `display.show_stats` | 是否显示实时统计 |
+| `profile.name` | 当前使用的配置档案名称 |
 
-`config.yaml` 中:
-```yaml
-screen:
-  width: 1080         # 手机宽度 (像素)
-  height: 2400        # 手机高度 (像素)
-  judgment_line_y: 0.78   # 判定线 Y (比例 0~1)
-  left_lanes: [0.15, 0.25, 0.35]   # 左侧 3 条轨道 X
-  right_lanes: [0.65, 0.75, 0.85]  # 右侧 3 条轨道 X
-```
-
-运行 `python main.py calibrate` 会自动测量这些值。
-
-### 检测参数
-
-```yaml
-detection:
-  method: "brightness"       # brightness 或 color
-  brightness:
-    threshold: 200           # 亮度阈值 (越高越严格, 只检测很亮的 note)
-    min_contour_area: 50     # 最小轮廓面积 (过滤噪点)
-    max_contour_area: 500    # 最大轮廓面积 (过滤大 UI 元素)
-```
-
-- **阈值太高** → 漏掉 note (假阴性, 导致 MISS)
-- **阈值太低** → 误触 (特效被当作 note, 导致 BAD/MISS)
-
-### 延迟补偿
-
-```yaml
-timing:
-  latency_compensation_ms: 0   # 延迟补偿 (毫秒, 正值=提前触发)
-```
-
-延迟来源:
-- `screencap`: ADB 截图传输 ~50~200ms
-- `processing`: OpenCV 分析 ~5~30ms
-- `touch`: ADB 触摸 ~30~100ms
-
-总延迟通常 100~300ms。对于 PJSK 的 PERFECT 判定 (~±33ms),
-**纯反应式太慢**。
-
-更好的方案是:
-1. 先用 `python main.py calibrate` 测出总延迟
-2. 设置 `latency_compensation_ms` 为总延迟的值
-3. 这样程序会提前触发 = 检测到 note 时立即发送触摸,
-   结合网络延迟实际刚好在 note 到达判定线时触发
+运行 `python main.py calibrate` 会自动测量并更新这些值。
 
 ## 架构
 
 ```
 pjsk-auto-player/
-├── main.py               # CLI 入口
-├── adb_controller.py     # ADB 控制 (截图/触摸/设备管理)
-├── screen_analyzer.py    # 画面分析 (CV 检测 note)
-├── auto_play.py          # 自动打歌引擎 (主循环 + 校准)
-├── config.yaml           # 配置文件
-├── requirements.txt      # Python 依赖
-└── README.md             # 本文件
+├── main.py                # CLI 入口 + 配置管理 (Profile 支持)
+├── adb_controller.py      # ADB 控制 (截图/触摸/设备管理 + scrcpy 后端)
+├── scrcpy_controller.py   # scrcpy 视频流后端 (可选)
+├── screen_analyzer.py     # 画面分析 (CV 检测 + 预测区域扫描)
+├── auto_play.py           # 自动打歌引擎 (预测引擎 + 校准工具)
+├── config.yaml            # 配置文件
+├── requirements.txt       # Python 依赖
+├── README.md              # 本文件
+└── profiles/              # 配置档案目录
+    └── phone2.yaml        # (示例) 第二个手机的配置
 ```
 
-## 进阶: 使用 scrcpy 提升性能
+### 模块关系
 
-纯 ADB screencap 帧率低 (5-10 FPS), 用 [scrcpy](https://github.com/Genymobile/scrcpy) 可达到 30-60 FPS:
+```
+                        ┌─────────────────────┐
+                        │    main.py (CLI)     │
+                        │  配置 + Profile 管理  │
+                        └─────┬───────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+      ┌────────────┐  ┌────────────┐  ┌────────────┐
+      │ADBController│  │ScreenAnaly│  │ AutoPlayer │
+      │ ADB/scrcpy  │  │ CV检测    │  │ 预测引擎    │
+      │ 截图/触摸   │  │ 预测区域  │  │ NoteTracker│
+      └────────────┘  └────────────┘  └────────────┘
+              │               │               │
+              └───────────────┴───────────────┘
+                          ┌─────────┐
+                          │ 手机    │
+                          └─────────┘
+```
 
-1. 安装 scrcpy:
+## 进阶技巧
+
+### 提升准确率
+
+1. **校准**: 先运行 `calibrate` 获取准确的判定线和轨道位置
+2. **亮度阈值**: 如果漏 note 就降低阈值 (`>` / `<` 热键), 如果误触就提高
+3. **延迟补偿**: 运行 `test` 看实际延迟, `+` / `-` 热键实时调整
+4. **预测引擎**: 默认启用, 如果需要禁用可设置 `prediction.enabled: false`
+
+### 多手机支持
+
+```bash
+# 手机 1: 校准并保存
+python main.py calibrate --profile phone1
+
+# 手机 2: 连接另一台手机, 校准并保存
+python main.py calibrate --profile phone2
+
+# 启动时指定手机
+python main.py start --profile phone1
+```
+
+### scrcpy 高帧率模式
+
+1. 安装 scrcpy
+2. 在 `config.yaml` 中设置:
+   ```yaml
+   adb:
+     screencap_method: scrcpy
+   scrcpy:
+     max_fps: 60
+     scale: 0.5
    ```
-   scoop install scrcpy   # 或用 winget
-   ```
-
-2. 修改 `adb_controller.py`, 增加 scrcpy 截图后端的支持:
-   利用 `scrcpy --no-control` 以 30+ FPS 输出视频流,
-   用 OpenCV 读取视频帧进行分析。
+3. 启动自动打歌
 
 ## 局限性
 
-- **帧率瓶颈**: ADB exec-out screencap 约 5-15 FPS, 对高速谱面不够
-- **延迟问题**: ADB 触摸路径较长, 低延迟手机 ~50ms, 有些手机 >100ms
-- **AP 难度**: 纯反应式 + ADB 延迟, 目前更适合 MAS 以下难度,
-  AP 需要结合**预测算法** (提前检测刚出现的 note, 计算到达时间)
-- **Flick 检测**: 方向检测准确性取决于游戏画面, 可能需要多次校准
+- **ADB 延迟**: 即使有预测引擎, ADB 触摸延迟 ~50ms 仍然存在
+- **帧率**: ADB screencap 5-15 FPS, 对高速谱面不够 (建议用 scrcpy)
+- **Flick 方向**: 方向检测依赖于画面中箭头特效的可识别性
+- **Hold 处理**: 通过短按压模拟长按, 不是真正的持续按住
 
 ## 未来改进方向
 
-1. **scrcpy 视频流** → 30+ FPS 实时分析
-2. **minitouch** → 替代 ADB input, 触摸延迟 <5ms
-3. **预测算法** → 检测 note 刚出现位置, 按 BPM 计算到达时间
-4. **AutoF4 风格的轨道识别** → ML 模型识别轨道布局
-5. **谱面解析** → 直接解析谱面文件, 完美时序
+1. **minitouch** → 替代 ADB input, 触摸延迟从 ~50ms 降到 <5ms
+2. **谱面解析** → 直接解析谱面文件, 完美时序
+3. **ML 检测** → 用轻量模型识别 note 类型和方向
+4. **Web UI** → 手机浏览器实时监控和控制
+5. **AutoF4 风格轨道** → 自动识别复杂轨道布局
 
 ## 免责声明
 

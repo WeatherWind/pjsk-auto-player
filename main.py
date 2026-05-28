@@ -5,11 +5,13 @@ PJSK Auto Player - 主入口
 基于 ADB + OpenCV 的 Project Sekai (プロジェクトセカイ) 自动打歌工具。
 
 用法:
-    python main.py start       # 启动自动打歌
-    python main.py calibrate   # 运行校准 (延迟/判定线/轨道)
-    python main.py calibrate --interactive  # 交互式校准(实时预览)
-    python main.py test        # 测试截图和 ADB 连接
-    python main.py test --loop # 持续截图测试 (按 Ctrl+C 停止)
+    python main.py start                    # 启动自动打歌
+    python main.py start --profile expert   # 使用 expert 配置档案
+    python main.py calibrate                # 运行校准 (延迟/判定线/轨道)
+    python main.py calibrate -i             # 交互式校准 (实时预览)
+    python main.py calibrate --profile expert  # 校准并保存到 expert 档案
+    python main.py test                     # 测试截图和 ADB 连接
+    python main.py test --loop              # 持续截图测试
 """
 
 import argparse
@@ -17,40 +19,109 @@ import logging
 import os
 import sys
 import time
+import shutil
 
 import yaml
 
 
-def load_config(path: str = "config.yaml") -> dict:
-    """加载 YAML 配置文件。"""
+# ──────────────────────────────────────────
+# 配置管理 (含 Profile 支持)
+# ──────────────────────────────────────────
+
+DEFAULT_CONFIG_PATH = "config.yaml"
+PROFILES_DIR = "profiles"
+
+
+def load_config(path: str = "config.yaml", profile: str = "") -> dict:
+    """加载 YAML 配置文件, 支持 profile。"""
+    # 如果指定了 profile, 尝试从 profiles 目录加载
+    if profile:
+        profile_path = os.path.join(PROFILES_DIR, f"{profile}.yaml")
+        if os.path.exists(profile_path):
+            print(f"📁 使用配置档案: {profile} ({profile_path})")
+            with open(profile_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            if config is None:
+                print(f"❌ 配置文件为空: {profile_path}")
+                sys.exit(1)
+            return _post_process_config(config)
+
+        # 尝试从 profile 名称直接找文件
+        if os.path.exists(profile):
+            print(f"📁 使用配置文件: {profile}")
+            with open(profile, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+            if config is None:
+                print(f"❌ 配置文件为空: {profile}")
+                sys.exit(1)
+            return _post_process_config(config)
+
+        print(f"⚠️  配置档案 '{profile}' 不存在, 回退到默认配置")
+
     if not os.path.exists(path):
         print(f"❌ 配置文件不存在: {path}")
-        print(f"   请确保当前目录下有 config.yaml 文件")
+        print(f"   请确保当前目录下有 {path} 文件")
         sys.exit(1)
 
     with open(path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    # 处理 ~ 和相对路径
+    if config is None:
+        print(f"❌ 配置文件为空: {path}")
+        sys.exit(1)
+
+    return _post_process_config(config)
+
+
+def _post_process_config(config: dict) -> dict:
+    """对加载的配置进行后处理 (路径展开等)。"""
     debug_dir = config.get("debug", {}).get("debug_dir", "debug_output")
     if debug_dir.startswith("~"):
         debug_dir = os.path.expanduser(debug_dir)
         config["debug"]["debug_dir"] = debug_dir
-
     return config
+
+
+def save_config(config: dict, path: str = "config.yaml", profile: str = ""):
+    """保存配置到文件。"""
+    if profile:
+        os.makedirs(PROFILES_DIR, exist_ok=True)
+        save_path = os.path.join(PROFILES_DIR, f"{profile}.yaml")
+    else:
+        save_path = path
+
+    with open(save_path, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False,
+                  allow_unicode=True, sort_keys=False)
+    print(f"💾 配置已保存: {save_path}")
+
+
+def list_profiles():
+    """列出所有可用的配置档案。"""
+    os.makedirs(PROFILES_DIR, exist_ok=True)
+    profiles = [f.replace(".yaml", "") for f in os.listdir(PROFILES_DIR)
+                if f.endswith(".yaml")]
+    if profiles:
+        print("📁 可用的配置档案:")
+        for p in sorted(profiles):
+            profile_path = os.path.join(PROFILES_DIR, f"{p}.yaml")
+            size = os.path.getsize(profile_path)
+            mtime = os.path.getmtime(profile_path)
+            time_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime))
+            print(f"   - {p}  ({size} bytes, last modified {time_str})")
+    else:
+        print("📁 暂无配置档案")
+
+
+# ──────────────────────────────────────────
+# 日志配置
+# ──────────────────────────────────────────
 
 
 def setup_logging(config: dict):
     """配置日志。"""
     level_name = config.get("debug", {}).get("log_level", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-
-    fmt = (
-        "\033[36m%(asctime)s\033[0m "
-        "\033[32m%(name)s\033[0m "
-        "%(levelname)s "
-        "%(message)s"
-    )
 
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(
@@ -66,6 +137,7 @@ def setup_logging(config: dict):
 # ──────────────────────────────────────────
 # 命令处理
 # ──────────────────────────────────────────
+
 
 def cmd_start(config: dict):
     """启动自动打歌。"""
@@ -84,12 +156,18 @@ def cmd_start(config: dict):
     print("    3. PJSK 已打开, 选好歌曲")
     print("    4. 准备好进入打歌画面")
     print()
+    print("  热键 (运行时):")
+    print("    P - 暂停/继续     Q - 退出")
+    print("    + - 延迟+5ms      - - 延迟-5ms")
+    print("    > - 阈值+5        < - 阈值-5")
+    print()
     input("  按 Enter 开始自动打歌...")
 
     player.start()
 
 
-def cmd_calibrate(config: dict, interactive: bool = False):
+def cmd_calibrate(config: dict, interactive: bool = False,
+                  profile: str = ""):
     """运行校准。"""
     from auto_play import Calibrator
 
@@ -97,26 +175,17 @@ def cmd_calibrate(config: dict, interactive: bool = False):
 
     if interactive:
         cal.interactive_calibrate()
+        # 交互式校准后保存配置
+        if profile:
+            save_config(config, profile=profile)
+        else:
+            save_config(config)
     else:
         results = cal.run_all()
 
-        if results:
-            # 输出配置更新建议
-            print("\n📝 将以下内容更新到 config.yaml:\n")
-            print("screen:")
-            print(f"  width: {config['screen']['width']}")
-            print(f"  height: {config['screen']['height']}")
-            if "judgment_line_y_ratio" in results:
-                print(f"  judgment_line_y: {results['judgment_line_y_ratio']}")
-            if "left_lanes" in results and results["left_lanes"]:
-                print(f"  left_lanes: {results['left_lanes']}")
-            if "right_lanes" in results and results["right_lanes"]:
-                print(f"  right_lanes: {results['right_lanes']}")
-            if "recommended_compensation_ms" in results:
-                comp = results["recommended_compensation_ms"]
-                print("\ntiming:")
-                print(f"  latency_compensation_ms: {comp}")
-            print()
+    # 列出可用档案
+    if profile:
+        list_profiles()
 
 
 def cmd_test(config: dict, loop: bool = False):
@@ -173,9 +242,11 @@ def cmd_test(config: dict, loop: bool = False):
                 t1 = time.perf_counter()
                 frame_count += 1
                 ms = (t1 - t0) * 1000
-                print(f"   [{frame_count}] 截图耗时: {ms:.1f}ms  "
-                      f"尺寸: {frame.shape[1]}x{frame.shape[0]}" if frame is not None
-                      else f"   [{frame_count}] 截图失败!")
+                if frame is not None:
+                    print(f"   [{frame_count}] 截图耗时: {ms:.1f}ms  "
+                          f"尺寸: {frame.shape[1]}x{frame.shape[0]}")
+                else:
+                    print(f"   [{frame_count}] 截图失败!")
                 time.sleep(0.5)
         except KeyboardInterrupt:
             print(f"\n   共测试 {frame_count} 帧")
@@ -185,17 +256,21 @@ def cmd_test(config: dict, loop: bool = False):
 # 主入口
 # ──────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="PJSK Auto Player - Project Sekai 自动打歌",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python main.py start              # 启动自动打歌
-  python main.py calibrate          # 自动校准参数
-  python main.py calibrate -i       # 交互式校准 (实时预览)
-  python main.py test               # 测试连接
-  python main.py test --loop        # 持续测试截图性能
+  python main.py start                         # 启动自动打歌
+  python main.py start --profile expert        # 使用 expert 档案
+  python main.py calibrate                     # 自动校准参数
+  python main.py calibrate -i                  # 交互式校准
+  python main.py calibrate --profile phone2    # 校准时保存到指定档案
+  python main.py test                          # 测试连接
+  python main.py test --loop                   # 持续测试截图性能
+  python main.py profiles                      # 列出配置档案
         """
     )
 
@@ -208,7 +283,11 @@ def main():
     sub = parser.add_subparsers(dest="command", help="命令")
 
     # start
-    sub.add_parser("start", help="启动自动打歌")
+    start_parser = sub.add_parser("start", help="启动自动打歌")
+    start_parser.add_argument(
+        "--profile", default="",
+        help="使用指定配置档案 (profiles/<name>.yaml)"
+    )
 
     # calibrate
     cal_parser = sub.add_parser("calibrate", help="校准参数")
@@ -216,6 +295,10 @@ def main():
         "-i", "--interactive",
         action="store_true",
         help="交互式校准模式 (显示实时预览)"
+    )
+    cal_parser.add_argument(
+        "--profile", default="",
+        help="校准结果保存到指定配置档案"
     )
 
     # test
@@ -226,14 +309,22 @@ def main():
         help="持续截图测试"
     )
 
+    # profiles
+    sub.add_parser("profiles", help="列出配置档案")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         return
 
-    # 加载配置
-    config = load_config(args.config)
+    # profiles 命令不需要加载配置
+    if args.command == "profiles":
+        list_profiles()
+        return
+
+    # 加载配置 (支持 profile)
+    config = load_config(args.config, getattr(args, 'profile', ''))
 
     # 设置日志
     setup_logging(config)
@@ -242,7 +333,8 @@ def main():
     if args.command == "start":
         cmd_start(config)
     elif args.command == "calibrate":
-        cmd_calibrate(config, interactive=args.interactive)
+        cmd_calibrate(config, interactive=args.interactive,
+                      profile=args.profile)
     elif args.command == "test":
         cmd_test(config, loop=args.loop)
 

@@ -1,16 +1,18 @@
 """
-自动打歌引擎 —— 核心循环: 截图 → 分析 → 触摸。
+自动打歌引擎 —— 核心循环: 截图 → 分析 → 触摸 (含预测引擎)。
 
-包含:
-  - 主循环 (screencap → analyze → touch)
-  - 延迟补偿
-  - 歌词 / flick / hold 处理
-  - 异常与超时处理
+核心改进:
+  1. 预测引擎: 提前检测判定线上方的 note, 计算滚动速度,
+     在 note 到达判定线时准时触发, 补偿 ADB 延迟
+  2. 实时统计: FPS / notes 数 / 延迟信息
+  3. 热键控制: P=暂停 Q=退出 +/-=补偿 </>=阈值
+  4. 校准自动写入 config.yaml
 """
 
 import logging
 import time
 import sys
+import os
 from typing import Optional
 
 import numpy as np
@@ -22,21 +24,200 @@ from screen_analyzer import ScreenAnalyzer, NoteEvent, GameState
 logger = logging.getLogger("pjsk_auto_play")
 
 
+class NoteTracker:
+    """
+    Note 轨迹追踪器 —— 预测引擎的核心。
+
+    工作方式:
+      1. 从 ScreenAnalyzer 获取判定线上方的 note 检测结果
+      2. 对每个轨道追踪 note 的 Y 位置变化
+      3. 计算滚动速度 (px/s)
+      4. 预测 note 到达判定线的时间
+      5. 在最佳时间触发触摸
+    """
+
+    def __init__(self, config: dict):
+        self.cfg = config
+        self.judgment_y = config["screen"]["judgment_line_y"] * config["screen"]["height"]
+        self.judgment_y = int(self.judgment_y)
+
+        prediction_cfg = config.get("prediction", {})
+        self.enabled = prediction_cfg.get("enabled", True)
+        self.min_track_frames = prediction_cfg.get("min_track_frames", 2)
+        self.velocity_window = prediction_cfg.get("velocity_smooth_window", 3)
+        self.manual_advance = prediction_cfg.get("manual_advance_ms", 0)
+
+        # 测量到的 ADB 延迟 (ms)
+        self._measured_latency_ms = 0
+
+        # 追踪状态: lane -> { positions: [(y, t), ...], velocity: float, fired: bool }
+        self._tracks: dict[int, dict] = {}
+
+    def set_latency(self, latency_ms: float):
+        """设置测量到的 ADB 延迟 (ms)。"""
+        self._measured_latency_ms = latency_ms
+        logger.info(f"预测引擎: ADB 延迟 = {latency_ms:.0f}ms")
+
+    def update(self, predicted_notes: list[NoteEvent],
+               detected_notes: list[NoteEvent],
+               now: float) -> list[dict]:
+        """
+        更新追踪状态, 返回需要触发的 note 列表。
+
+        Returns:
+            [{"lane": int, "note_type": str, "x": int, "y": int,
+              "flick_direction": str}, ...]
+        """
+        if not self.enabled:
+            return []
+
+        triggers = []
+
+        # 更新已有轨迹
+        predicted_lanes = {n.lane for n in predicted_notes}
+
+        # 对每个被预测到的轨道, 更新位置
+        for note in predicted_notes:
+            if note.lane not in self._tracks:
+                self._tracks[note.lane] = {
+                    "positions": [],
+                    "velocity": 0.0,
+                    "fired": False,
+                    "note_type": "tap",
+                }
+            track = self._tracks[note.lane]
+            track["positions"].append((note.y, now))
+
+            # 保持窗口大小
+            max_positions = self.velocity_window + 2
+            if len(track["positions"]) > max_positions:
+                track["positions"] = track["positions"][-max_positions:]
+
+            # 计算速度
+            if len(track["positions"]) >= 2:
+                ys = [p[0] for p in track["positions"]]
+                ts = [p[1] for p in track["positions"]]
+                # 线性回归: 速度 = dy / dt (像素/秒)
+                # dy 应为负 (note 从上往下)
+                dy = ys[-1] - ys[0]
+                dt = ts[-1] - ts[0]
+                if dt > 0:
+                    velocity = dy / dt  # 像素/秒, 应为负值
+                    # 平滑
+                    alpha = 0.7
+                    track["velocity"] = track["velocity"] * (1 - alpha) + velocity * alpha
+
+        # 检测是否需要触发
+        advance_ms = self._measured_latency_ms
+        if self.manual_advance > 0:
+            advance_ms = self.manual_advance
+
+        for lane, track in self._tracks.items():
+            if track["fired"]:
+                continue  # 已经触发过了
+
+            if not track["positions"]:
+                continue
+
+            # 需要足够多的追踪帧才能建立稳定的速度
+            if len(track["positions"]) < self.min_track_frames:
+                continue
+
+            # 如果速度太小 (接近 0), 说明 note 可能停在屏幕上了
+            if abs(track["velocity"]) < 50:
+                continue
+
+            # 当前 Y 位置
+            current_y = track["positions"][-1][0]
+            distance_to_judgment = current_y - self.judgment_y  # 应为正 (note 在判定线上方)
+
+            # 如果 note 已经在判定线位置或以下, 立即触发
+            if distance_to_judgment <= 0:
+                track["fired"] = True
+                triggers.append({
+                    "lane": lane,
+                    "note_type": track.get("note_type", "tap"),
+                    "x": self._lane_to_x(lane),
+                    "y": self.judgment_y,
+                    "flick_direction": "",
+                })
+                continue
+
+            # 计算剩余时间 (秒) 和触发提前量
+            velocity = abs(track["velocity"])
+            if velocity < 50:  # 太慢, 可能不准
+                continue
+
+            time_to_arrival = distance_to_judgment / velocity  # 秒
+            advance_seconds = advance_ms / 1000.0
+
+            # 如果到达时间小于提前量, 触发!
+            if time_to_arrival <= advance_seconds:
+                track["fired"] = True
+                triggers.append({
+                    "lane": lane,
+                    "note_type": track.get("note_type", "tap"),
+                    "x": self._lane_to_x(lane),
+                    "y": self.judgment_y,
+                    "flick_direction": "",
+                })
+
+        # 清理: 如果 note 已到达判定线 (被 detected_notes 捕获), 或轨迹过期
+        detected_lanes = {n.lane for n in detected_notes}
+        expired_lanes = []
+        for lane, track in self._tracks.items():
+            if track["fired"] or lane in detected_lanes:
+                expired_lanes.append(lane)
+            elif track["positions"]:
+                last_t = track["positions"][-1][1]
+                if now - last_t > 1.0:  # 1 秒没更新
+                    expired_lanes.append(lane)
+
+        for lane in expired_lanes:
+            del self._tracks[lane]
+
+        return triggers
+
+    def _lane_to_x(self, lane: int) -> int:
+        """将轨道编号映射到 X 坐标 (像素)。"""
+        s = self.cfg.get("screen", {})
+        w = s.get("width", 1080)
+        l = [int(x * w) for x in s.get("left_lanes", [0.15, 0.25, 0.35])]
+        r = [int(x * w) for x in s.get("right_lanes", [0.65, 0.75, 0.85])]
+        all_l = l + r
+        if 0 <= lane < len(all_l):
+            return all_l[lane]
+        return w // 2
+
+    def reset(self):
+        """重置所有轨迹 (新歌开始时调用)。"""
+        self._tracks.clear()
+
+    def get_stats(self) -> dict:
+        """获取追踪统计。"""
+        return {
+            "tracked_notes": len(self._tracks),
+            "measured_latency_ms": self._measured_latency_ms,
+        }
+
+
 class AutoPlayer:
     """
     自动打歌器。
 
     工作流程:
         1. 截取手机屏幕
-        2. 分析画面, 检测判定线上的 notes
-        3. 对每个检测到的 note 发送触摸指令
-        4. 循环 1-3, 直到歌曲结束
+        2. 分析画面, 检测判定线上的 notes + 判定线上方的 note (预测)
+        3. 预测引擎: 追踪 note 滚动速度, 提前触发
+        4. 对判定线上的 note 发送触摸指令 (备用)
+        5. 循环 1-5, 直到歌曲结束
     """
 
     def __init__(self, config: dict):
         self.cfg = config
         self.adb = ADBController(config)
         self.analyzer = ScreenAnalyzer(config)
+        self.tracker = NoteTracker(config)
 
         self._running = False
         self._paused = False
@@ -51,17 +232,28 @@ class AutoPlayer:
         self.flick_distance = config.get("touch", {}).get("flick_distance", 150)
         self.flick_duration = config.get("touch", {}).get("flick_duration_ms", 50)
 
+        # 显示参数
+        self.show_stats = config.get("display", {}).get("show_stats", True)
+        self.stats_interval = config.get("display", {}).get("stats_interval_frames", 15)
+
+        # 预测参数
+        self.use_prediction = config.get("prediction", {}).get("enabled", True)
+
         # 状态
         self._last_game_active = 0.0
-        self._held_lanes = set()       # 当前保持按下的轨道
-        self._touch_history = []       # 触摸历史 (用于调试)
+        self._held_lanes = set()
+        self._touch_history = []
         self._stats = {
             "frames": 0,
             "taps": 0,
             "flicks": 0,
             "holds": 0,
+            "predicted_triggers": 0,
             "misses": 0,
             "start_time": 0.0,
+            "last_stats_time": 0.0,
+            "fps": 0.0,
+            "frame_count_stats": 0,
         }
 
     # ──────────────────────────────────────────
@@ -73,15 +265,28 @@ class AutoPlayer:
         if not self._ensure_ready():
             return
 
+        # 测量延迟 (用于预测引擎)
+        if self.use_prediction:
+            logger.info("测量 ADB 延迟用于预测引擎...")
+            latency = self.adb.measure_latency(samples=3)
+            total_latency = latency.get("total_avg_ms", self.latency_comp)
+            if total_latency > 0:
+                self.tracker.set_latency(total_latency)
+            else:
+                logger.warning("延迟测量失败, 使用配置值")
+                self.tracker.set_latency(self.latency_comp or 150)
+
         self._running = True
         self._paused = False
         self._stats["start_time"] = time.time()
+        self._stats["last_stats_time"] = time.time()
 
+        prediction_status = "已启用" if self.use_prediction else "已禁用"
         logger.info("=" * 50)
         logger.info("自动打歌已启动!")
-        logger.info(f"延迟补偿: {self.latency_comp}ms")
+        logger.info(f"延迟补偿: {self.latency_comp}ms  预测引擎: {prediction_status}")
         logger.info(f"判定线 Y: {self.analyzer.judgment_y}")
-        logger.info("按 Ctrl+C 停止")
+        logger.info("热键: P=暂停  Q=退出  +/-=延迟补偿  </>=阈值")
         logger.info("=" * 50)
 
         try:
@@ -97,15 +302,20 @@ class AutoPlayer:
         self._paused = False
         self._release_all()
         self.analyzer.close()
+        self.adb.close_scrcpy()
 
         elapsed = time.time() - self._stats["start_time"]
+        fps_avg = self._stats["frames"] / elapsed if elapsed > 0 else 0
+
         logger.info("─" * 40)
         logger.info("自动打歌已停止")
         logger.info(f"运行时间: {elapsed:.1f}s")
-        logger.info(f"处理帧数: {self._stats['frames']}")
-        logger.info(f"点击次数: {self._stats['taps']}")
-        logger.info(f"Flick 次数: {self._stats['flicks']}")
-        logger.info(f"长按次数: {self._stats['holds']}")
+        logger.info(f"处理帧数: {self._stats['frames']}  ({fps_avg:.1f} FPS)")
+        logger.info(f"点击: {self._stats['taps']}  "
+                     f"Flick: {self._stats['flicks']}  "
+                     f"长按: {self._stats['holds']}")
+        if self.use_prediction:
+            logger.info(f"预测触发: {self._stats['predicted_triggers']}")
         logger.info("─" * 40)
 
     def pause(self) -> None:
@@ -113,9 +323,10 @@ class AutoPlayer:
         self._paused = not self._paused
         if self._paused:
             self._release_all()
-            logger.info("⏸ 已暂停")
+            logger.info("\n⏸ 已暂停")
         else:
-            logger.info("▶ 已恢复")
+            self.tracker.reset()
+            logger.info("\n▶ 已恢复")
 
     @property
     def is_running(self) -> bool:
@@ -147,12 +358,11 @@ class AutoPlayer:
                 )
                 self.cfg["screen"]["width"] = actual_w
                 self.cfg["screen"]["height"] = actual_h
-                # 重建 analyzer
                 self.analyzer = ScreenAnalyzer(self.cfg)
+                self.tracker = NoteTracker(self.cfg)
         except Exception as e:
             logger.warning(f"获取屏幕分辨率失败: {e}")
 
-        # 测试截图
         logger.info("测试截图...")
         test_frame = self.adb.screencap()
         if test_frame is None:
@@ -167,11 +377,24 @@ class AutoPlayer:
     # ──────────────────────────────────────────
 
     def _main_loop(self) -> None:
-        """核心循环: 截图 → 分析 → 触摸。"""
+        """核心循环: 截图 → 分析 → 预测 → 触摸。"""
+        import sys  # for non-blocking key input
+
+        # 尝试启用非阻塞输入 (仅类 Unix 系统)
+        kb_enabled = False
+        try:
+            import select
+            kb_enabled = True
+        except ImportError:
+            pass
+
         while self._running:
             loop_start = time.perf_counter()
 
             if self._paused:
+                # 即使在暂停状态也检查热键
+                if kb_enabled and self._check_keyboard():
+                    pass
                 time.sleep(0.1)
                 continue
 
@@ -179,65 +402,175 @@ class AutoPlayer:
             frame = self.adb.screencap()
             if frame is None:
                 self._stats["misses"] += 1
-                # 连续截图失败可能是设备断连
                 if self._stats["misses"] > 10:
                     logger.error("连续 10 次截图失败, 停止")
                     break
                 time.sleep(0.05)
                 continue
 
-            self._stats["misses"] = 0  # 重置失败计数
+            self._stats["misses"] = 0
 
-            # 2. 分析
+            # 2. 分析 (判定线 + 预测区域)
             state = self.analyzer.analyze(frame)
             self._stats["frames"] += 1
 
             # 3. 如果不在游戏中, 等待
             if not state.in_game:
-                # 检查超时
                 if self._last_game_active > 0:
                     idle = time.time() - self._last_game_active
                     if idle > self.game_over_timeout:
                         logger.info("游戏结束超时, 停止")
                         break
+                # 重置预测追踪
+                self.tracker.reset()
                 time.sleep(0.05)
                 continue
 
             self._last_game_active = time.time()
+            now = time.time()
 
-            # 4. 处理 notes
+            # 4. 预测引擎: 触发提前发现的 note
+            if self.use_prediction:
+                triggers = self.tracker.update(
+                    state.predicted_notes,
+                    state.detected_notes,
+                    now,
+                )
+                for trigger in triggers:
+                    lane_x = trigger["x"]
+                    lane_y = trigger["y"]
+                    note_type = trigger["note_type"]
+                    if note_type == "tap":
+                        self.adb.tap(lane_x, lane_y)
+                        self._stats["predicted_triggers"] += 1
+                        self._stats["taps"] += 1
+                        logger.debug(f"[PRED] TAP lane={trigger['lane']} @({lane_x},{lane_y})")
+
+            # 5. 处理判定线上的 notes (备用)
             self._process_notes(state)
 
-            # 5. 帧率控制
+            # 6. 键盘热键检查
+            if kb_enabled:
+                self._check_keyboard()
+
+            # 7. 显示实时统计
+            if self.show_stats and self._stats["frames"] % self.stats_interval == 0:
+                self._print_stats()
+
+            # 8. 帧率控制
             elapsed = time.perf_counter() - loop_start
             sleep_time = self.min_interval - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
+    def _check_keyboard(self) -> bool:
+        """
+        检查键盘热键输入 (非阻塞)。
+
+        热键:
+          p/P - 暂停/继续
+          q/Q - 退出
+          +/- - 微调延迟补偿 (±5ms)
+          </> - 微调亮度阈值 (±5)
+        """
+        try:
+            import sys
+            import select
+            import termios
+            import tty
+
+            # 非阻塞读取 stdin
+            fd = sys.stdin.fileno()
+            if not select.select([sys.stdin], [], [], 0)[0]:
+                return False
+
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+            c = ch.lower()
+
+            if c == "p":
+                self.pause()
+                return True
+            elif c == "q":
+                logger.info("用户按 Q 退出")
+                self._running = False
+                return True
+            elif c == "+" or c == "=":
+                self.latency_comp += 5
+                logger.info(f"延迟补偿: {self.latency_comp}ms")
+                return True
+            elif c == "-" or c == "_":
+                self.latency_comp = max(0, self.latency_comp - 5)
+                logger.info(f"延迟补偿: {self.latency_comp}ms")
+                return True
+            elif c == ">":
+                self.analyzer.bright_thresh = min(255, self.analyzer.bright_thresh + 5)
+                logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
+                return True
+            elif c == "<":
+                self.analyzer.bright_thresh = max(0, self.analyzer.bright_thresh - 5)
+                logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
+                return True
+
+        except (ImportError, AttributeError, Exception):
+            # 非阻塞输入不可用 (Windows) - 静默忽略
+            pass
+
+        return False
+
+    def _print_stats(self):
+        """在终端打印实时统计信息。"""
+        now = time.time()
+        elapsed = now - self._stats["start_time"]
+        dt = now - self._stats["last_stats_time"]
+
+        if dt > 0:
+            frames_in_interval = self.stats_interval
+            fps = frames_in_interval / dt
+            self._stats["fps"] = fps
+
+        self._stats["last_stats_time"] = now
+
+        tracker_stats = self.tracker.get_stats() if self.use_prediction else {}
+
+        stats_line = (
+            f"\033[36m[STATS]\033[0m "
+            f"FPS: \033[33m{self._stats['fps']:.1f}\033[0m | "
+            f"帧: {self._stats['frames']} | "
+            f"点: {self._stats['taps']} "
+            f"划: {self._stats['flicks']} "
+            f"按: {self._stats['holds']}"
+        )
+
+        if self.use_prediction:
+            stats_line += f" | 预触发: {self._stats['predicted_triggers']}"
+
+        stats_line += (
+            f" | 补偿: \033[32m{self.latency_comp}ms\033[0m | "
+            f"检测: \033[35m{self.analyzer.bright_thresh}\033[0m"
+        )
+
+        sys.stdout.write("\r" + " " * 80 + "\r")
+        sys.stdout.write(stats_line)
+        sys.stdout.flush()
 
     # ──────────────────────────────────────────
     # Note 处理
     # ──────────────────────────────────────────
 
     def _process_notes(self, state: GameState) -> None:
-        """
-        处理检测到的 notes: 发送触摸指令。
-
-        策略:
-          - tap: 直接点击
-          - flick: 点击 + 滑动
-          - hold: 按下并保持, 直到 note 消失
-        """
+        """处理检测到的判定线 notes。"""
         current_active = set()
         lane_positions = self.analyzer.get_lane_positions()
 
         for note in state.detected_notes:
             lane_x, lane_y = lane_positions[note.lane]
             current_active.add(note.lane)
-
-            # 应用延迟补偿 (提前触发)
-            if self.latency_comp > 0:
-                # 如果启用补偿, 在检测到时就触发
-                pass  # 实际上我们已经检测到了, 会立即触发
 
             if note.note_type == "tap":
                 self._do_tap(note, lane_x, lane_y)
@@ -246,19 +579,16 @@ class AutoPlayer:
             elif note.note_type == "hold":
                 self._do_hold(note, lane_x, lane_y)
 
-        # 释放不再活跃的 hold 轨道
         for lane in list(self._held_lanes):
             if lane not in current_active:
                 self._release_lane(lane, lane_positions)
 
     def _do_tap(self, note: NoteEvent, x: int, y: int) -> None:
-        """处理 tap note: 点击。"""
         self.adb.tap(x, y)
         self._stats["taps"] += 1
         logger.debug(f"TAP  lane={note.lane} @({x},{y})  conf={note.confidence:.2f}")
 
     def _do_flick(self, note: NoteEvent, x: int, y: int) -> None:
-        """处理 flick note: 点击 + 向箭头方向滑动。"""
         direction = note.flick_direction or "up"
         if direction == "up":
             self.adb.flick_up(x, y, self.flick_distance, self.flick_duration)
@@ -269,31 +599,25 @@ class AutoPlayer:
         elif direction == "right":
             self.adb.flick_right(x, y, self.flick_distance, self.flick_duration)
         else:
-            # 默认上划
             self.adb.flick_up(x, y, self.flick_distance, self.flick_duration)
 
         self._stats["flicks"] += 1
         logger.debug(f"FLICK lane={note.lane} dir={direction} @({x},{y})")
 
     def _do_hold(self, note: NoteEvent, x: int, y: int) -> None:
-        """处理 hold note: 按下并保持。"""
         if note.lane not in self._held_lanes:
-            # 首次检测到 hold, 开始按下
             self.adb.press(x, y, duration_ms=100)
             self._held_lanes.add(note.lane)
             self._stats["holds"] += 1
             logger.debug(f"HOLD START lane={note.lane} @({x},{y})")
         else:
-            # 持续按住 (通过短按压维持, 因为我们无法真正保持)
             self.adb.press(x, y, duration_ms=50)
 
     def _release_lane(self, lane: int, positions: list) -> None:
-        """释放 hold 轨道。"""
         self._held_lanes.discard(lane)
         logger.debug(f"HOLD END  lane={lane}")
 
     def _release_all(self) -> None:
-        """释放所有保持的触摸。"""
         self._held_lanes.clear()
 
 
@@ -304,6 +628,7 @@ class AutoPlayer:
 class Calibrator:
     """
     校准工具: 自动测量延迟、判定线位置、轨道位置。
+    改进: 自动写入 config.yaml。
     """
 
     def __init__(self, config: dict):
@@ -330,19 +655,17 @@ class Calibrator:
             logger.info(f"  截图平均: {results['latency']['screencap_avg_ms']:.1f}ms")
             logger.info(f"  触摸平均: {results['latency']['tap_avg_ms']:.1f}ms")
             logger.info(f"  总延迟:   {results['latency']['total_avg_ms']:.1f}ms")
-            # 推荐补偿值
             recommended = results["latency"]["total_avg_ms"]
             results["recommended_compensation_ms"] = round(recommended)
             logger.info(f"  推荐延迟补偿: {round(recommended)}ms")
 
-        # 2. 获取一张截图用于视觉校准
+        # 2. 截图
         logger.info("\n[2/3] 获取屏幕截图用于视觉校准...")
         frame = self.adb.screencap()
         if frame is None:
             logger.error("截图失败")
             return results
 
-        # 更新 analyzer 的实际分辨率
         h, w = frame.shape[:2]
         self.cfg["screen"]["width"] = w
         self.cfg["screen"]["height"] = h
@@ -355,11 +678,9 @@ class Calibrator:
         results["judgment_line_y_ratio"] = round(judgment_y / h, 4)
         logger.info(f"  判定线 Y={judgment_y} (比例={results['judgment_line_y_ratio']})")
 
-        # 轨道位置
         lanes = self.analyzer.calibrate_lanes(frame)
         if lanes:
             lane_ratios = [round(x / w, 4) for x in lanes]
-            # 分成左右
             mid = w // 2
             left = [r for r, x in zip(lane_ratios, lanes) if x < mid]
             right = [r for r, x in zip(lane_ratios, lanes) if x >= mid]
@@ -368,7 +689,7 @@ class Calibrator:
             logger.info(f"  左轨道: {left}")
             logger.info(f"  右轨道: {right}")
 
-        # 保存校准结果截图
+        # 保存校准截图
         debug_path = "calibration_result.jpg"
         debug_frame = frame.copy()
         cv2.line(debug_frame, (0, judgment_y), (w, judgment_y), (0, 255, 0), 3)
@@ -377,20 +698,79 @@ class Calibrator:
         cv2.imwrite(debug_path, debug_frame)
         logger.info(f"\n校准结果截图已保存: {debug_path}")
 
-        logger.info("\n✅ 校准完成!")
-        logger.info("请将以上结果更新到 config.yaml 中。")
-        logger.info("=" * 50)
+        # ── 自动写入 config.yaml ──
+        auto_save = self._auto_save_config(results)
+        if auto_save:
+            logger.info("\n✅ 校准完成! 配置已自动更新到 config.yaml")
+        else:
+            logger.info("\n⚠️  无法自动写入 config.yaml")
+            logger.info("请将以下内容手动添加到 config.yaml:")
+            self._print_config_snippet(results)
 
+        logger.info("=" * 50)
         return results
 
-    def interactive_calibrate(self):
-        """
-        交互式校准: 实时预览 + 按键调参。
+    def _auto_save_config(self, results: dict) -> bool:
+        """自动将校准结果写入 config.yaml。"""
+        import yaml
 
-        使用方法:
-          在手机上进入 PJSK 打歌界面, 运行此函数。
-          按 'q' 退出, 按 'r' 重新校准。
-        """
+        config_path = "config.yaml"
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+
+            modified = False
+
+            if "judgment_line_y_ratio" in results:
+                config["screen"]["judgment_line_y"] = results["judgment_line_y_ratio"]
+                modified = True
+
+            if "left_lanes" in results and results["left_lanes"]:
+                config["screen"]["left_lanes"] = results["left_lanes"]
+                modified = True
+
+            if "right_lanes" in results and results["right_lanes"]:
+                config["screen"]["right_lanes"] = results["right_lanes"]
+                modified = True
+
+            if "recommended_compensation_ms" in results:
+                if "timing" not in config:
+                    config["timing"] = {}
+                config["timing"]["latency_compensation_ms"] = results["recommended_compensation_ms"]
+                modified = True
+
+            if modified:
+                with open(config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False,
+                              allow_unicode=True, sort_keys=False)
+                logger.info("  ✅ config.yaml 已自动更新")
+                return True
+
+        except Exception as e:
+            logger.warning(f"自动写入配置失败: {e}")
+
+        return False
+
+    def _print_config_snippet(self, results: dict):
+        """打印配置文本块 (供手动复制)。"""
+        print("\n📝 请将以下内容更新到 config.yaml:\n")
+        print("screen:")
+        print(f"  width: {self.cfg['screen']['width']}")
+        print(f"  height: {self.cfg['screen']['height']}")
+        if "judgment_line_y_ratio" in results:
+            print(f"  judgment_line_y: {results['judgment_line_y_ratio']}")
+        if "left_lanes" in results and results["left_lanes"]:
+            print(f"  left_lanes: {results['left_lanes']}")
+        if "right_lanes" in results and results["right_lanes"]:
+            print(f"  right_lanes: {results['right_lanes']}")
+        if "recommended_compensation_ms" in results:
+            comp = results["recommended_compensation_ms"]
+            print("\ntiming:")
+            print(f"  latency_compensation_ms: {comp}")
+        print()
+
+    def interactive_calibrate(self):
+        """交互式校准: 实时预览 + 按键调参。"""
         import os
 
         if not self.adb.wait_for_device(timeout=10):
@@ -413,7 +793,6 @@ class Calibrator:
                 time.sleep(0.1)
                 continue
 
-            # 更新实际分辨率
             h, w = frame.shape[:2]
             if w != self.cfg["screen"]["width"] or h != self.cfg["screen"]["height"]:
                 self.cfg["screen"]["width"] = w
@@ -421,12 +800,14 @@ class Calibrator:
                 self.analyzer = ScreenAnalyzer(self.cfg)
                 judgment_y = self.analyzer.judgment_y
 
-            # 分析
             state = self.analyzer.analyze(frame)
 
-            # 画调试信息
             debug = frame.copy()
             cv2.line(debug, (0, judgment_y), (w, judgment_y), (0, 255, 0), 2)
+            # 检测区域上边界
+            cv2.line(debug, (0, self.analyzer.note_detect_top),
+                     (w, self.analyzer.note_detect_top), (255, 255, 0), 1)
+
             for idx, (lx, ly) in enumerate(self.analyzer.get_lane_positions()):
                 active = any(n.lane == idx for n in state.detected_notes)
                 color = (0, 0, 255) if active else (128, 128, 128)
@@ -434,10 +815,14 @@ class Calibrator:
                 if active:
                     cv2.circle(debug, (lx, ly), 8, (0, 0, 255), -1)
 
+            # 画预测 note
+            for note in state.predicted_notes:
+                cv2.circle(debug, (note.x, note.y), 6, (255, 0, 255), -1)
+
             info = [
                 f"Threshold: {threshold}",
                 f"Judgment Y: {judgment_y} ({judgment_y/h:.3f})",
-                f"Notes: {len(state.detected_notes)}",
+                f"Notes: {len(state.detected_notes)}  Pred: {len(state.predicted_notes)}",
                 f"In Game: {state.in_game}",
                 f"'q'=quit  'r'=recalib  '+/-'=adj Y  '</>'=adj thr",
             ]
