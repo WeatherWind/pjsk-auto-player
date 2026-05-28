@@ -458,25 +458,130 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 <div class="mn">
 
 <div id="p-dash" class="pg a">
-<div class="cx">
-<span id="st-bdg" class="bdg bdg-r"><span class="dot dr"></span>未连接</span>
-<button class="btn btn-s btn-p" id="btn-setup" onclick="setup()">🔌 连接设备</button>
-<button class="btn btn-s btn-p" id="btn-fool" onclick="foolMode()" style="display:none">🤖 傻瓜模式</button>
-<button class="btn btn-s btn-p" id="btn-start" onclick="act('start')" style="display:none">▶ 开始冲榜</button>
-<button class="btn btn-s btn-d" id="btn-stop" onclick="act('stop')" style="display:none">⏹ 停止</button>
-<button class="btn btn-s" id="btn-pause" onclick="act('pause')" style="display:none">⏸ 暂停</button>
+
+<!-- 状态栏 -->
+<div class="cx" style="justify-content:space-between;flex-wrap:wrap">
+<div style="display:flex;gap:8px;align-items:center">
+  <span id="st-bdg" class="bdg bdg-r"><span class="dot dr"></span>未连接</span>
+  <span id="dev-info" style="color:var(--td);font-size:12px"></span>
 </div>
-<div class="card"><div class="ct">冲榜进度</div>
-<div class="sg"><div class="st"><div class="sv" id="s-p">0</div><div class="sl">已完成</div></div>
-<div class="st"><div class="sv" id="s-t">∞</div><div class="sl">目标</div></div>
-<div class="st"><div class="sv" id="s-e">0s</div><div class="sl">运行时间</div></div>
-<div class="st"><div class="sv" id="s-f">0</div><div class="sl">FPS</div></div></div></div>
-<div class="card"><div class="ct">操作统计</div>
-<div class="sg"><div class="st"><div class="sv" id="s-tap">0</div><div class="sl">点击</div></div>
-<div class="st"><div class="sv" id="s-fl">0</div><div class="sl">Flick</div></div>
-<div class="st"><div class="sv" id="s-hl">0</div><div class="sl">长按</div></div>
-<div class="st"><div class="sv" id="s-lc">0ms</div><div class="sl">延迟补偿</div></div></div></div>
-<div class="card"><div class="ct">实时日志</div><div class="lb" id="log-box"><div class="ll">等待中...</div></div></div>
+<div style="display:flex;gap:8px">
+  <button class="btn btn-s" onclick="setup()" id="btn-setup">🔌 连接</button>
+  <button class="btn btn-d btn-s" onclick="act('stop')" id="btn-stop" style="display:none">⏹ 停止</button>
+</div>
+</div>
+
+<!-- MAA 风格任务面板 -->
+<div class="card" style="padding:0;overflow:hidden">
+<table style="width:100%;border-collapse:collapse">
+<tr style="border-bottom:1px solid var(--bd);background:var(--bg)">
+  <td style="padding:4px 16px;width:40px"></td>
+  <td style="padding:12px 8px;color:var(--td);font-size:12px;font-weight:600">步骤</td>
+  <td style="padding:12px 8px;color:var(--td);font-size:12px;font-weight:600">配置</td>
+  <td style="padding:12px 16px;color:var(--td);font-size:12px;font-weight:600;text-align:right">状态</td>
+</tr>
+
+<!-- 1. 校准 -->
+<tr style="border-bottom:1px solid var(--bd)">
+  <td style="padding:16px"><input type="checkbox" id="chk-calibrate" checked onchange="updateTaskUI()"></td>
+  <td style="padding:12px 8px">
+    <div style="font-weight:600;font-size:14px">📏 校准</div>
+    <div style="color:var(--td);font-size:11px">测量延迟 + 判定线位置</div>
+  </td>
+  <td style="padding:12px 8px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--td)">亮度阈值</span>
+      <input type="range" id="cal-threshold" min="150" max="250" value="200" style="width:80px" onchange="document.getElementById('cal-thr-val').textContent=this.value">
+      <span id="cal-thr-val" style="font-size:12px;color:var(--ac)">200</span>
+    </div>
+  </td>
+  <td style="padding:12px 16px;text-align:right">
+    <span id="st-cal" class="bdg bdg-r" style="font-size:11px">待执行</span>
+  </td>
+</tr>
+
+<!-- 2. 编队 -->
+<tr style="border-bottom:1px solid var(--bd)">
+  <td style="padding:16px"><input type="checkbox" id="chk-team"></td>
+  <td style="padding:12px 8px">
+    <div style="font-weight:600;font-size:14px">👥 编队</div>
+    <div style="color:var(--td);font-size:11px">应用编队模板</div>
+  </td>
+  <td style="padding:12px 8px">
+    <select id="task-team" style="padding:6px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:4px;color:var(--tx);font-size:12px" onchange="document.getElementById('chk-team').checked=true;updateTaskUI()">
+      <option value="">-- 不编队 --</option>
+    </select>
+  </td>
+  <td style="padding:12px 16px;text-align:right">
+    <span id="st-team" class="bdg" style="font-size:11px">跳过</span>
+  </td>
+</tr>
+
+<!-- 3. 选歌 -->
+<tr style="border-bottom:1px solid var(--bd)">
+  <td style="padding:16px"><input type="checkbox" id="chk-combo" checked></td>
+  <td style="padding:12px 8px">
+    <div style="font-weight:600;font-size:14px">🎵 选歌</div>
+    <div style="color:var(--td);font-size:11px">歌单/自动切歌</div>
+  </td>
+  <td style="padding:12px 8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select id="task-combo" style="padding:6px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:4px;color:var(--tx);font-size:12px;flex:1"></select>
+      <select id="task-diff" style="padding:6px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:4px;color:var(--tx);font-size:12px">
+        <option value="any">任意</option>
+        <option value="easy">EASY</option>
+        <option value="normal">NORMAL</option>
+        <option value="hard">HARD</option>
+        <option value="expert" selected>EXPERT</option>
+        <option value="master">MASTER</option>
+      </select>
+    </div>
+  </td>
+  <td style="padding:12px 16px;text-align:right">
+    <span id="st-combo" class="bdg" style="font-size:11px">待开始</span>
+  </td>
+</tr>
+
+<!-- 4. 打歌 -->
+<tr>
+  <td style="padding:16px"><input type="checkbox" id="chk-play" checked></td>
+  <td style="padding:12px 8px">
+    <div style="font-weight:600;font-size:14px">▶ 打歌</div>
+    <div style="color:var(--td);font-size:11px">自动冲榜</div>
+  </td>
+  <td style="padding:12px 8px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--td)">次数</span>
+      <input type="number" id="task-count" value="10" min="0" style="width:60px;padding:6px;background:var(--bg);border:1px solid var(--bd);border-radius:4px;color:var(--tx);font-size:12px">
+      <label style="font-size:12px;color:var(--td);display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="task-infinite" onchange="document.getElementById('task-count').disabled=this.checked"> 无限
+      </label>
+    </div>
+  </td>
+  <td style="padding:12px 16px;text-align:right">
+    <span id="st-play" class="bdg" style="font-size:11px">待开始</span>
+  </td>
+</tr>
+</table>
+</div>
+
+<!-- 开始按钮 + 进度 -->
+<div class="cx" style="justify-content:center;margin:16px 0">
+<button class="btn btn-p" id="btn-go" onclick="runTasks()" style="padding:12px 48px;font-size:16px;font-weight:600">🚀 开始</button>
+</div>
+
+<div class="card">
+<div class="cx" style="justify-content:space-between;margin-bottom:8px">
+  <span class="ct" style="margin:0">实时状态</span>
+  <div style="display:flex;gap:16px;font-size:12px">
+    <span style="color:var(--td)">FPS: <b id="d-fps" style="color:var(--tx)">0</b></span>
+    <span style="color:var(--td)">已打: <b id="d-done" style="color:var(--tx)">0</b></span>
+    <span style="color:var(--td)">耗时: <b id="d-time" style="color:var(--tx)">0s</b></span>
+  </div>
+</div>
+<div class="lb" id="log-box"><div class="ll">准备就绪</div></div>
+</div>
+
 </div>
 
 <div id="p-phone" class="pg">
@@ -520,22 +625,68 @@ async function poll(){try{
 let d=await g('/api/status');
 let e=document.getElementById('st-bdg');let r=d.adb;
 e.innerHTML=r?'<span class="dot dg"></span>已连接':'<span class="dot dr"></span>未连接';e.className='bdg '+(r?'bdg-g':'bdg-r');
-['btn-start','btn-stop','btn-pause','btn-fool'].forEach(id=>document.getElementById(id).style.display=r?'':'none');
-let s=await g('/api/stats');let p=s.running;
-document.getElementById('s-p').textContent=s.songs_played;
-document.getElementById('s-t').textContent=s.target||'∞';
-document.getElementById('s-e').textContent=(s.elapsed_seconds||0)+'s';
-document.getElementById('s-f').textContent=(s.fps||0).toFixed(1);
-document.getElementById('s-tap').textContent=s.total_taps;
-document.getElementById('s-fl').textContent=s.total_flicks;
-document.getElementById('s-hl').textContent=s.total_holds;
-document.getElementById('s-lc').textContent=(s.latency_comp_ms||0)+'ms';
-let l=await g('/api/log');let lb=document.getElementById('log-box');
-if(l.log){lb.innerHTML=l.log.split('\n').filter(x=>x).map(x=>'<div class="ll">'+esc(x)+'</div>').join('');lb.scrollTop=lb.scrollHeight}
-if(r&&document.getElementById('btn-setup').textContent!='已连接'){document.getElementById('btn-setup').textContent='已连接 ✓'}
-if(document.getElementById('ss-img').src)ss()
+document.getElementById('dev-info').textContent=r?'📱 '+d.screen+' '+((d.scrcpy?'📡scrcpy':'')+(d.minitouch?' 🤏minitouch':'')):'';
+document.getElementById('btn-stop').style.display=_appRunning?'':'none';
+let s=await g('/api/stats');
+document.getElementById('d-fps').textContent=(s.fps||0).toFixed(1);
+document.getElementById('d-done').textContent=s.songs_played||0;
+document.getElementById('d-time').textContent=(s.elapsed_seconds||0)+'s';
+let l=await g('/api/log');
+if(l.log){let lb=document.getElementById('log-box');
+lb.innerHTML=l.log.split('\n').filter(x=>x).map(x=>'<div class="ll">'+esc(x)+'</div>').join('');
+lb.scrollTop=lb.scrollHeight}
 }catch(e){}
 setTimeout(poll,2000)}
+
+// ── Task runners ──
+var _appRunning=false;
+
+async function runTasks(){
+  _appRunning=true;
+  document.getElementById('btn-go').textContent='⏳ 执行中...';
+  document.getElementById('btn-go').disabled=true;
+  let lb=document.getElementById('log-box');
+  lb.innerHTML='<div class="ll">🚀 开始执行...</div>';
+  
+  // 1. 连接
+  await fetch('/api/action?action=reconnect');
+  await new Promise(r=>setTimeout(r,2000));
+  
+  // 2. 校准 (如果勾选)
+  if(document.getElementById('chk-calibrate').checked){
+    document.getElementById('st-cal').className='bdg bdg-y';document.getElementById('st-cal').textContent='进行中';
+    await fetch('/api/action?action=calibrate');
+    await new Promise(r=>setTimeout(r,6000));
+    document.getElementById('st-cal').className='bdg bdg-g';document.getElementById('st-cal').textContent='✅ 完成';
+  }
+  
+  // 3. 编队 (如果勾选)
+  if(document.getElementById('chk-team').checked){
+    let team=document.getElementById('task-team').value;
+    if(team){
+      document.getElementById('st-team').className='bdg bdg-y';document.getElementById('st-team').textContent='进行中';
+      await fetch('/api/action?action=team&team='+team);
+      await new Promise(r=>setTimeout(r,3000));
+      document.getElementById('st-team').className='bdg bdg-g';document.getElementById('st-team').textContent='✅ 完成';
+    }
+  }
+  
+  // 4. 冲榜
+  if(document.getElementById('chk-play').checked){
+    let combo=document.getElementById('task-combo').value||'grind-single';
+    let count=document.getElementById('task-infinite').checked?0:parseInt(document.getElementById('task-count').value)||10;
+    document.getElementById('st-play').className='bdg bdg-y';document.getElementById('st-play').textContent='进行中';
+    await fetch('/api/action?action=start&combo='+combo+'&count='+count);
+    document.getElementById('st-play').className='bdg bdg-g';document.getElementById('st-play').textContent='▶ 运行中';
+  }
+  
+  document.getElementById('btn-go').textContent='🚀 开始';
+  document.getElementById('btn-go').disabled=false;
+}
+
+function updateTaskUI(){
+  document.getElementById('cal-threshold').value=document.getElementById('cal-thr-val').textContent;
+}
 async function ss(){try{
 let d=await g('/api/screenshot');
 if(d.image){document.getElementById('ss-img').src='data:image/jpeg;base64,'+d.image;document.getElementById('ss-info').textContent=(d.w||'?')+'x'+(d.h||'?')}
@@ -543,14 +694,14 @@ if(d.image){document.getElementById('ss-img').src='data:image/jpeg;base64,'+d.im
 async function loadCfg(){try{let d=await g('/api/config');document.getElementById('cfg-editor').value=d.content||''}catch(e){}}
 async function saveCfg(){await fetch('/api/config',{method:'POST',headers:{'Content-Type':'text/plain'},body:document.getElementById('cfg-editor').value});alert('✅ 已保存')}
 async function loadCombos(){try{
-let d=await g('/api/combos');let s=document.getElementById('sel-combo');let l=document.getElementById('combo-list');
-s.innerHTML='<option value="">-- 选择 --</option>';l.innerHTML='';
-(d.combos||[]).forEach(c=>{s.innerHTML+=`<option value="${c.key}">${c.name} (${c.songs}首)</option>`;l.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><strong>${c.name}</strong> <span style="color:var(--td);font-size:12px">${c.songs}首</span>${c.description?'<div style="color:var(--td);font-size:12px">'+c.description+'</div>':''}</div>`})
+let d=await g('/api/combos');let s=document.getElementById('task-combo');let s2=document.getElementById('sel-combo');let l=document.getElementById('combo-list');
+s.innerHTML='<option value="grind-single">单曲循环</option>';l.innerHTML='';
+(d.combos||[]).forEach(c=>{s.innerHTML+=`<option value="${c.key}">${c.name} (${c.songs}首)</option>`;if(s2)s2.innerHTML+=`<option value="${c.key}">${c.name}</option>`;l.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><strong>${c.name}</strong> <span style="color:var(--td);font-size:12px">${c.songs}首</span>${c.description?'<div style="color:var(--td);font-size:12px">'+c.description+'</div>':''}</div>`})
 }catch(e){}}
 async function loadTeams(){try{
-let d=await g('/api/teams');let s=document.getElementById('sel-team');let l=document.getElementById('team-list');
+let d=await g('/api/teams');let s=document.getElementById('task-team');let s2=document.getElementById('sel-team');let l=document.getElementById('team-list');
 s.innerHTML='<option value="">-- 不编队 --</option>';l.innerHTML='';
-(d.teams||[]).forEach(t=>{s.innerHTML+=`<option value="${t.key}">${t.name} (${t.method})</option>`;l.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><strong>${t.name}</strong> <span style="color:var(--td);font-size:12px">${t.method}</span>${t.description?'<div style="color:var(--td);font-size:12px">'+t.description+'</div>':''}</div>`})
+(d.teams||[]).forEach(t=>{s.innerHTML+=`<option value="${t.key}">${t.name} (${t.method})</option>`;if(s2)s2.innerHTML+=`<option value="${t.key}">${t.name}</option>`;l.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><strong>${t.name}</strong> <span style="color:var(--td);font-size:12px">${t.method}</span>${t.description?'<div style="color:var(--td);font-size:12px">'+t.description+'</div>':''}</div>`})
 }catch(e){}}
 async function loadVT(){try{
 let d=await g('/api/versions');let h='<table style="width:100%;border-collapse:collapse">';
