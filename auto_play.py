@@ -415,15 +415,8 @@ class AutoPlayer:
 
     def _main_loop(self) -> None:
         """核心循环: 截图 → 分析 → 预测 → 触摸。"""
-        import sys  # for non-blocking key input
-
-        # 尝试启用非阻塞输入 (仅类 Unix 系统)
-        kb_enabled = False
-        try:
-            import select
-            kb_enabled = True
-        except ImportError:
-            pass
+        # 非阻塞键盘输入 (跨平台)
+        kb_enabled = True
 
         while self._running:
             loop_start = time.perf_counter()
@@ -511,62 +504,76 @@ class AutoPlayer:
     def _check_keyboard(self) -> bool:
         """
         检查键盘热键输入 (非阻塞)。
+        跨平台支持: Unix (termios) / Windows (msvcrt).
 
         热键:
-          p/P - 暂停/继续
-          q/Q - 退出
-          +/- - 微调延迟补偿 (±5ms)
-          </> - 微调亮度阈值 (±5)
+          p/P - 暂停/继续   q/Q - 退出
+          +/- - 延迟补偿     </> - 亮度阈值
         """
+        ch = self._get_key_nonblocking()
+        if ch is None:
+            return False
+
+        c = ch.lower()
+        if c == "p":
+            self.pause()
+            return True
+        elif c == "q":
+            logger.info("用户按 Q 退出")
+            self._running = False
+            return True
+        elif c == "+" or c == "=":
+            self.latency_comp += 5
+            logger.info(f"延迟补偿: {self.latency_comp}ms")
+            return True
+        elif c == "-" or c == "_":
+            self.latency_comp = max(0, self.latency_comp - 5)
+            logger.info(f"延迟补偿: {self.latency_comp}ms")
+            return True
+        elif c == ">":
+            self.analyzer.bright_thresh = min(255, self.analyzer.bright_thresh + 5)
+            logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
+            return True
+        elif c == "<":
+            self.analyzer.bright_thresh = max(0, self.analyzer.bright_thresh - 5)
+            logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
+            return True
+
+        return False
+
+    @staticmethod
+    def _get_key_nonblocking() -> Optional[str]:
+        """
+        跨平台非阻塞键盘读取。
+          - Windows: msvcrt.kbhit()
+          - Unix:    termios + select
+        """
+        import sys
+        if sys.platform == "win32":
+            try:
+                import msvcrt
+                if msvcrt.kbhit():
+                    return msvcrt.getch().decode("utf-8", errors="ignore")
+            except ImportError:
+                pass
+            return None
+
+        # Unix/macOS
         try:
-            import sys
             import select
             import termios
             import tty
-
-            # 非阻塞读取 stdin
             fd = sys.stdin.fileno()
             if not select.select([sys.stdin], [], [], 0)[0]:
-                return False
-
-            old_settings = termios.tcgetattr(fd)
+                return None
+            old = termios.tcgetattr(fd)
             try:
-                tty.setraw(sys.stdin.fileno())
-                ch = sys.stdin.read(1)
+                tty.setraw(fd)
+                return sys.stdin.read(1)
             finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-            c = ch.lower()
-
-            if c == "p":
-                self.pause()
-                return True
-            elif c == "q":
-                logger.info("用户按 Q 退出")
-                self._running = False
-                return True
-            elif c == "+" or c == "=":
-                self.latency_comp += 5
-                logger.info(f"延迟补偿: {self.latency_comp}ms")
-                return True
-            elif c == "-" or c == "_":
-                self.latency_comp = max(0, self.latency_comp - 5)
-                logger.info(f"延迟补偿: {self.latency_comp}ms")
-                return True
-            elif c == ">":
-                self.analyzer.bright_thresh = min(255, self.analyzer.bright_thresh + 5)
-                logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
-                return True
-            elif c == "<":
-                self.analyzer.bright_thresh = max(0, self.analyzer.bright_thresh - 5)
-                logger.info(f"亮度阈值: {self.analyzer.bright_thresh}")
-                return True
-
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
         except (ImportError, AttributeError, Exception):
-            # 非阻塞输入不可用 (Windows) - 静默忽略
-            pass
-
-        return False
+            return None
 
     def _print_stats(self):
         """在终端打印实时统计信息。"""
@@ -1069,6 +1076,7 @@ class BatchPlayer:
                 self._batch_stats["total_holds"] += song_stats.get("holds", 0)
                 self._batch_stats["total_frames"] += song_stats.get("frames", 0)
                 self._batch_stats["total_game_time"] += game_time
+                self._write_stats()  # ← 更新 Web 仪表盘
                 logger.info(f"✅ 第 {song_num} 首 完成! "
                            f"用时: {game_time:.1f}s  "
                            f"点: {song_stats.get('taps', 0)}  "

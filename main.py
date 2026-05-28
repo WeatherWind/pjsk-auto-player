@@ -77,7 +77,22 @@ def load_config(path: str = "config.yaml", profile: str = "") -> dict:
 
 
 def _post_process_config(config: dict) -> dict:
-    """对加载的配置进行后处理 (路径展开等)。"""
+    """对加载的配置进行后处理 (路径展开 + 必填校验)。"""
+    # 校验必填字段
+    required = {
+        "screen": ["width", "height", "judgment_line_y"],
+        "adb": ["executable"],
+        "detection": ["method"],
+    }
+    for section, fields in required.items():
+        if section not in config:
+            print(f"⚠️  配置缺少 {section} 段, 使用默认值")
+            config[section] = {}
+        for field in fields:
+            if field not in config.get(section, {}):
+                print(f"⚠️  配置 {section}.{field} 未设置, 使用默认值")
+
+    # 路径展开
     debug_dir = config.get("debug", {}).get("debug_dir", "debug_output")
     if debug_dir.startswith("~"):
         debug_dir = os.path.expanduser(debug_dir)
@@ -364,6 +379,11 @@ def main():
         default="config.yaml",
         help="配置文件路径 (默认: config.yaml)"
     )
+    parser.add_argument(
+        "-V", "--version",
+        action="store_true",
+        help="显示版本号"
+    )
 
     sub = parser.add_subparsers(dest="command", help="命令")
 
@@ -436,6 +456,15 @@ def main():
     args = parser.parse_args()
 
     if not args.command:
+        if args.version:
+            version_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "VERSION")
+            if os.path.exists(version_path):
+                with open(version_path) as f:
+                    print(f"PJSK Auto Player v{f.read().strip()}")
+            else:
+                print("PJSK Auto Player (version unknown)")
+            return
         parser.print_help()
         return
 
