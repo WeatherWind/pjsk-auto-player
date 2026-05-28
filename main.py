@@ -206,8 +206,21 @@ def cmd_calibrate(config: dict, interactive: bool = False,
         list_profiles()
 
 
-def cmd_auto(config: dict, count: int = 0, infinite: bool = False, combo: str = ""):
+def cmd_auto(config: dict, count: int = 0, infinite: bool = False,
+             combo: str = "", team: str = ""):
     """启动冲榜模式: 自动连续打歌。"""
+    # 先应用编队 (如需)
+    if team:
+        from team_builder import TeamBuilder
+        from adb_controller import ADBController
+        adb = ADBController(config)
+        if adb.wait_for_device(timeout=10):
+            tb = TeamBuilder(config, team_name=team)
+            if tb.team:
+                logger.info(f"应用编队: {tb.team.name}")
+                tb.navigate_to_team_screen(adb)
+                tb.apply(adb)
+
     if combo:
         # 歌单模式
         from combo_player import ComboPlayer
@@ -474,12 +487,19 @@ def main():
         help="歌单名称 (combos/ 目录下的歌单, 如 grind-single)"
     )
     auto_parser.add_argument(
+        "--team", default="",
+        help="编队模板名称 (teams/ 目录下的编队, 如 event-grind)"
+    )
+    auto_parser.add_argument(
         "--profile", default="",
         help="使用指定配置档案"
     )
 
     # combos
     sub.add_parser("combos", help="列出可用歌单")
+
+    # teams
+    sub.add_parser("teams", help="列出可用编队模板")
 
     args = parser.parse_args()
 
@@ -532,6 +552,19 @@ def main():
             print()
         return
 
+    if args.command == "teams":
+        from team_builder import TeamBuilder
+        tb = TeamBuilder({})
+        teams = tb.list_teams()
+        print("📁 可用编队:")
+        print()
+        for t in teams:
+            print(f"  {t['key']:20s}  {t['name']} ({t['method']})")
+            if t['description']:
+                print(f"  {'':20s}  {t['description']}")
+            print()
+        return
+
     # 加载配置 (支持 profile)
     config = load_config(args.config, getattr(args, 'profile', ''))
 
@@ -542,7 +575,8 @@ def main():
     if args.command == "start":
         cmd_start(config)
     elif args.command == "auto":
-        cmd_auto(config, count=args.count, infinite=args.infinite, combo=args.combo)
+        cmd_auto(config, count=args.count, infinite=args.infinite,
+                 combo=args.combo, team=args.team)
     elif args.command == "calibrate":
         cmd_calibrate(config, interactive=args.interactive,
                       profile=args.profile)

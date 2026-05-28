@@ -1,0 +1,41 @@
+{
+  "doc": "PJSK Auto Player — 编队配置",
+  "version": "1",
+
+  "event-grind": {
+    "name": "活动冲榜队",
+    "description": "自动推荐最高加成编队",
+    "auto_recommend": true,
+    "method": "auto",
+    "slots": []
+  },
+
+  "score-attack": {
+    "name": "分数特化队",
+    "description": "手动指定角色位置 (按角色名)",
+    "auto_recommend": false,
+    "method": "manual",
+    "slots": [
+      {"pos": 1, "character": "宵崎奏", "card_type": "any"},
+      {"pos": 2, "character": "朝比奈まふゆ", "card_type": "any"},
+      {"pos": 3, "character": "东云絵名", "card_type": "any"},
+      {"pos": 4, "character": "暁山瑞希", "card_type": "any"},
+      {"pos": 5, "character": "任意", "card_type": "support"}
+    ]
+  },
+
+  "color-event": {
+    "name": "色彩活动队",
+    "description": "按卡牌颜色编队",
+    "auto_recommend": false,
+    "method": "color",
+    "color": "cute",
+    "slots": [
+      {"pos": 1, "color": "cute"},
+      {"pos": 2, "color": "cute"},
+      {"pos": 3, "color": "cute"},
+      {"pos": 4, "color": "cute"},
+      {"pos": 5, "color": "any"}
+    ]
+  }
+}
