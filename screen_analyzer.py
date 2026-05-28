@@ -36,6 +36,8 @@ class NoteEvent:
 class GameState:
     """游戏画面状态。"""
     in_game: bool = False      # 是否在打歌中
+    in_result: bool = False    # 是否在结算画面
+    in_menu: bool = False      # 是否在菜单/选歌画面
     detected_notes: list[NoteEvent] = field(default_factory=list)
     # 判定线上方区域检测到的 note (用于预测)
     predicted_notes: list[NoteEvent] = field(default_factory=list)
@@ -130,8 +132,15 @@ class ScreenAnalyzer:
             self._recalc_coords()
 
         # 判断是否在游戏中
-        if not self._is_game_screen(frame):
-            state.in_game = False
+        game = self._is_game_screen(frame)
+        result = self._is_result_screen(frame)
+
+        if result:
+            state.in_result = True
+            return state
+
+        if not game:
+            state.in_menu = True
             return state
 
         state.in_game = True
@@ -210,6 +219,39 @@ class ScreenAnalyzer:
         total_pixels = roi.shape[0] * roi.shape[1]
         bright_ratio = bright_pixels / total_pixels if total_pixels > 0 else 0
         return bright_ratio > 0.02
+
+    def _is_result_screen(self, frame: np.ndarray) -> bool:
+        """
+        判断是否为 PJSK 结算画面。
+
+        结算画面特征:
+          - 整体偏亮 (白色/浅色背景)
+          - 判定线区域没有 note 活动
+          - 画面中央有大量白色/浅色像素
+        """
+        h, w = frame.shape[:2]
+
+        # 中央区域: 取屏幕中央 60%x60%
+        cx1, cy1 = int(w * 0.2), int(h * 0.2)
+        cx2, cy2 = int(w * 0.8), int(h * 0.8)
+        center = frame[cy1:cy2, cx1:cx2]
+        if center.size == 0:
+            return False
+
+        gray = cv2.cvtColor(center, cv2.COLOR_BGR2GRAY)
+        mean_brightness = np.mean(gray)
+
+        # 检查判定线区域 (应当没有 note 活动)
+        jy = self.judgment_y
+        j_roi = frame[
+            max(0, jy - 30):min(h, jy + 30),
+            max(0, w // 4):min(w, w * 3 // 4)
+        ]
+        j_gray = cv2.cvtColor(j_roi, cv2.COLOR_BGR2GRAY) if j_roi.size > 0 else gray[:1,:1]
+        j_bright_ratio = np.mean(j_gray > self.bright_thresh - 30) if j_gray.size > 0 else 0
+
+        # 结算画面: 整体亮 (mean_brightness > 120) 且判定线区域无 note 活动
+        return mean_brightness > 120 and j_bright_ratio < 0.01
 
     # ──────────────────────────────────────────
     # 判定线上方区域检测 (预测引擎用)
@@ -510,6 +552,19 @@ class ScreenAnalyzer:
         """返回检测区域的 (top, bottom, left, right) 像素坐标。"""
         return (self.note_detect_top, self.judgment_y,
                 0, self.screen_w)
+
+    def classify_screen(self, frame: np.ndarray) -> str:
+        """
+        快速分类当前画面: 'game' / 'result' / 'menu' / 'unknown'
+        用于冲榜模式自动导航。
+        """
+        if frame is None:
+            return "unknown"
+        if self._is_game_screen(frame):
+            return "game"
+        if self._is_result_screen(frame):
+            return "result"
+        return "menu"
 
     # ──────────────────────────────────────────
     # 调试与可视化

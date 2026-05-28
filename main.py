@@ -12,6 +12,9 @@ PJSK Auto Player - 主入口
     python main.py calibrate --profile expert  # 校准并保存到 expert 档案
     python main.py test                     # 测试截图和 ADB 连接
     python main.py test --loop              # 持续截图测试
+    python main.py auto                     # 冲榜模式: 连续打 5 首
+    python main.py auto -n 20              # 连续打 20 首
+    python main.py auto --infinite          # 无限循环
 """
 
 import argparse
@@ -188,6 +191,38 @@ def cmd_calibrate(config: dict, interactive: bool = False,
         list_profiles()
 
 
+def cmd_auto(config: dict, count: int = 0, infinite: bool = False):
+    """启动冲榜模式: 自动连续打歌。"""
+    from auto_play import BatchPlayer
+
+    if infinite:
+        song_count = 0
+    else:
+        song_count = count
+
+    player = BatchPlayer(config, song_count=song_count)
+
+    print()
+    print("  ╔══════════════════════════════════╗")
+    print("  ║   PJSK Auto Player - 冲榜模式    ║")
+    print("  ╚══════════════════════════════════╝")
+    print()
+    if song_count > 0:
+        print(f"  目标: 连续打 {song_count} 首")
+    else:
+        print("  目标: 无限循环 (按 Ctrl+C 停止)")
+    print()
+    print("  请确保:")
+    print("    1. 手机已通过 USB 连接到电脑")
+    print("    2. USB 调试已开启")
+    print("    3. PJSK 已打开, 选好歌曲")
+    print("    4. 准备好进入打歌画面")
+    print()
+    input("  按 Enter 开始冲榜...")
+
+    player.start()
+
+
 def cmd_test(config: dict, loop: bool = False):
     """测试 ADB 连接和截图。"""
     from adb_controller import ADBController
@@ -271,6 +306,9 @@ def main():
   python main.py test                          # 测试连接
   python main.py test --loop                   # 持续测试截图性能
   python main.py profiles                      # 列出配置档案
+  python main.py auto                          # 冲榜模式 (5首)
+  python main.py auto -n 20                   # 冲榜模式 (20首)
+  python main.py auto --infinite               # 无限冲榜
         """
     )
 
@@ -312,6 +350,21 @@ def main():
     # profiles
     sub.add_parser("profiles", help="列出配置档案")
 
+    # auto (冲榜模式)
+    auto_parser = sub.add_parser("auto", help="冲榜模式: 自动连续打歌")
+    auto_parser.add_argument(
+        "-n", "--count", type=int, default=5,
+        help="打歌次数 (默认: 5)"
+    )
+    auto_parser.add_argument(
+        "--infinite", action="store_true",
+        help="无限循环 (直到手动停止)"
+    )
+    auto_parser.add_argument(
+        "--profile", default="",
+        help="使用指定配置档案"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -332,6 +385,8 @@ def main():
     # 执行命令
     if args.command == "start":
         cmd_start(config)
+    elif args.command == "auto":
+        cmd_auto(config, count=args.count, infinite=args.infinite)
     elif args.command == "calibrate":
         cmd_calibrate(config, interactive=args.interactive,
                       profile=args.profile)

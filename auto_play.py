@@ -856,3 +856,348 @@ class Calibrator:
                 self.cfg["detection"]["brightness"]["threshold"] = threshold
 
         cv2.destroyAllWindows()
+
+
+# ──────────────────────────────────────────
+# 冲榜模式 (Batch Play) —— 自动连续打歌
+# ──────────────────────────────────────────
+
+class BatchPlayer:
+    """
+    冲榜模式: 自动连续打歌, 处理结算画面、等待、重试。
+
+    工作流程:
+      1. 启动 AutoPlayer, 等待用户进入打歌
+      2. 等待歌曲结束 (game_over_timeout)
+      3. 检测结算画面, 逐次点击返回选歌
+      4. 等待回到打歌画面
+      5. 重复 2-4, 直到达到指定次数
+    """
+
+    def __init__(self, config: dict, song_count: int = 0):
+        self.cfg = config
+        self.player = AutoPlayer(config)
+
+        bp = config.get("batch_play", {})
+        self.target_count = song_count or bp.get("default_count", 0)
+        self.result_wait = bp.get("result_wait_seconds", 4.0)
+        self.result_tap_interval = bp.get("result_tap_interval", 2.5)
+        self.max_result_taps = bp.get("max_result_taps", 15)
+        self.next_song_timeout = bp.get("next_song_timeout", 30.0)
+        self.song_timeout = bp.get("song_timeout", 360)
+        self.max_failures = bp.get("max_failures_per_song", 20)
+
+        self._running = False
+        self._batch_stats = {
+            "songs_played": 0,
+            "songs_failed": 0,
+            "total_taps": 0,
+            "total_flicks": 0,
+            "total_holds": 0,
+            "total_frames": 0,
+            "start_time": 0.0,
+            "total_game_time": 0.0,
+        }
+
+    def start(self) -> None:
+        """启动冲榜模式。"""
+        # 先用 AutoPlayer 的 prepare 逻辑
+        if not self.player._ensure_ready():
+            return
+
+        # 测量延迟
+        if self.player.use_prediction:
+            logger.info("测量 ADB 延迟...")
+            latency = self.player.adb.measure_latency(samples=3)
+            total = latency.get("total_avg_ms", 0)
+            if total > 0:
+                self.player.tracker.set_latency(total)
+
+        self._running = True
+        self._batch_stats["start_time"] = time.time()
+
+        count_label = f"{self.target_count} 首" if self.target_count > 0 else "无限"
+        logger.info("=" * 50)
+        logger.info("🔥 PJSK 冲榜模式 已启动!")
+        logger.info(f"目标次数: {count_label}")
+        logger.info(f"延迟补偿: {self.player.latency_comp}ms")
+        logger.info("请在手机上进入打歌画面, 程序将自动循环")
+        logger.info("按 Ctrl+C 停止")
+        logger.info("=" * 50)
+
+        try:
+            self._auto_play_loop()
+        except KeyboardInterrupt:
+            logger.info("\n收到中断信号...")
+        finally:
+            self._print_final_stats()
+            self._cleanup()
+
+    def _auto_play_loop(self):
+        """冲榜主循环: 打歌 → 结算 → 下一首。"""
+        while self._running:
+            # 检查是否达到目标次数
+            if self.target_count > 0 and \
+               self._batch_stats["songs_played"] >= self.target_count:
+                logger.info(f"✅ 已完成 {self.target_count} 首, 冲榜结束!")
+                break
+
+            # ── 1. 等待进入打歌画面 ──
+            song_num = self._batch_stats["songs_played"] + 1
+            logger.info(f"\n{'─' * 40}")
+            logger.info(f"🎵 第 {song_num} 首 — 等待打歌开始...")
+
+            if not self._wait_for_game_start():
+                logger.info("等待打歌开始超时, 停止")
+                break
+
+            # ── 2. 打歌 ──
+            logger.info(f"▶ 第 {song_num} 首 开始!")
+            song_start = time.time()
+            song_stats = self._play_one_song()
+            game_time = time.time() - song_start
+
+            # ── 3. 统计 ──
+            if song_stats:
+                self._batch_stats["songs_played"] += 1
+                self._batch_stats["total_taps"] += song_stats.get("taps", 0)
+                self._batch_stats["total_flicks"] += song_stats.get("flicks", 0)
+                self._batch_stats["total_holds"] += song_stats.get("holds", 0)
+                self._batch_stats["total_frames"] += song_stats.get("frames", 0)
+                self._batch_stats["total_game_time"] += game_time
+                logger.info(f"✅ 第 {song_num} 首 完成! "
+                           f"用时: {game_time:.1f}s  "
+                           f"点: {song_stats.get('taps', 0)}  "
+                           f"划: {song_stats.get('flicks', 0)}")
+            else:
+                self._batch_stats["songs_failed"] += 1
+                logger.warning(f"⚠️  第 {song_num} 首 异常结束")
+
+            # ── 4. 处理结算画面 ──
+            if self._running:
+                logger.info("📊 检测到结算画面, 正在跳过...")
+                self._handle_result_screen()
+
+            # 短期暂停防止过热
+            time.sleep(0.5)
+
+    def _wait_for_game_start(self, need_game: bool = True) -> bool:
+        """
+        等待进入打歌画面。
+
+        Returns:
+            True 如果检测到打歌开始, False 如果超时
+        """
+        timeout = self.next_song_timeout
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            if not self._running:
+                return False
+
+            frame = self.player.adb.screencap()
+            if frame is None:
+                time.sleep(0.3)
+                continue
+
+            screen_type = self.player.analyzer.classify_screen(frame)
+
+            if need_game and screen_type == "game":
+                # 确认确实是打歌中: 连续检测到 2 次
+                time.sleep(0.1)
+                frame2 = self.player.adb.screencap()
+                if frame2 and self.player.analyzer.classify_screen(frame2) == "game":
+                    return True
+
+            if not need_game and screen_type != "game":
+                return True
+
+            time.sleep(0.2)
+
+        return False
+
+    def _play_one_song(self) -> Optional[dict]:
+        """
+        打一首歌, 返回该次打歌的统计。
+
+        内部使用 AutoPlayer 的循环逻辑, 但增加了:
+          - 单曲超时保护
+          - 结算画面检测后自动退出循环
+        """
+        # 重置追踪器
+        self.player.tracker.reset()
+
+        self.player._running = True
+        self.player._paused = False
+        self.player._stats["start_time"] = time.time()
+        self.player._stats["last_stats_time"] = time.time()
+        self.player._last_game_active = time.time()
+
+        song_start = time.time()
+        failures = 0
+
+        while self.player._running:
+            # 单曲超时
+            if time.time() - song_start > self.song_timeout:
+                logger.warning(f"⏰ 单曲超时 ({self.song_timeout}s), 跳过")
+                break
+
+            loop_start = time.perf_counter()
+
+            if self.player._paused:
+                time.sleep(0.1)
+                continue
+
+            # 截图
+            frame = self.player.adb.screencap()
+            if frame is None:
+                failures += 1
+                if failures > self.max_failures:
+                    logger.error(f"连续 {failures} 次截图失败, 放弃当前歌曲")
+                    break
+                time.sleep(0.05)
+                continue
+
+            failures = 0
+
+            # 分析
+            state = self.player.analyzer.analyze(frame)
+            self.player._stats["frames"] += 1
+
+            # 画面分类
+            if state.in_result:
+                # 歌曲结束, 结算画面出现
+                logger.info("检测到结算画面, 结束打歌")
+                self.player._running = False
+                break
+
+            if not state.in_game and not state.in_menu:
+                # 既不是打歌也不是菜单 — 可能是加载或过渡
+                if self.player._last_game_active > 0:
+                    idle = time.time() - self.player._last_game_active
+                    if idle > self.player.game_over_timeout:
+                        logger.info("游戏结束超时, 结束打歌")
+                        self.player._running = False
+                        break
+                self.player.tracker.reset()
+                time.sleep(0.05)
+                continue
+
+            if not state.in_game:
+                # 菜单/选歌画面
+                self.player.tracker.reset()
+                time.sleep(0.05)
+                continue
+
+            # 打歌中
+            self.player._last_game_active = time.time()
+            now = time.time()
+
+            # 预测引擎
+            if self.player.use_prediction:
+                triggers = self.player.tracker.update(
+                    state.predicted_notes, state.detected_notes, now
+                )
+                for trigger in triggers:
+                    self.player.adb.tap(trigger["x"], trigger["y"])
+                    self.player._stats["predicted_triggers"] += 1
+                    self.player._stats["taps"] += 1
+
+            # 判定线 note 处理
+            self.player._process_notes(state)
+
+            # 实时统计
+            if self.player.show_stats and \
+               self.player._stats["frames"] % self.player.stats_interval == 0:
+                self.player._print_stats()
+
+            # 帧率控制
+            elapsed = time.perf_counter() - loop_start
+            sleep_time = self.player.min_interval - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        # 收集统计
+        self.player._release_all()
+        return {
+            "taps": self.player._stats["taps"],
+            "flicks": self.player._stats["flicks"],
+            "holds": self.player._stats["holds"],
+            "frames": self.player._stats["frames"],
+            "predicted": self.player._stats.get("predicted_triggers", 0),
+        }
+
+    def _handle_result_screen(self):
+        """
+        处理结算画面: 等待 → 逐次点击 → 返回选歌。
+
+        PJSK 典型结算流程:
+          1. 分数展示 (自动滚动)  ~3s
+          2. 点击 → 详细结果
+          3. 点击 → 可能显示称号/等级提升
+          4. 点击 → 返回歌曲选择/房间
+        """
+        # 等待结算动画播放
+        time.sleep(self.result_wait)
+
+        # 找到屏幕中央
+        w = self.cfg.get("screen", {}).get("width", 1080)
+        h = self.cfg.get("screen", {}).get("height", 2400)
+        cx, cy = w // 2, h // 2
+
+        for i in range(self.max_result_taps):
+            if not self._running:
+                return
+
+            # 点击屏幕中央
+            self.player.adb.tap(cx, cy)
+            time.sleep(self.result_tap_interval)
+
+            # 检查画面状态
+            frame = self.player.adb.screencap()
+            if frame is None:
+                continue
+
+            st = self.player.analyzer.classify_screen(frame)
+
+            if st == "game":
+                logger.info("✅ 已返回打歌画面")
+                return
+            if st == "menu":
+                logger.info("✅ 已返回选歌/菜单")
+                return
+
+        logger.warning(f"⚠️  结算画面点击 {self.max_result_taps} 次仍未回到选歌, "
+                       "尝试继续...")
+
+    def _print_final_stats(self):
+        """打印冲榜最终统计。"""
+        elapsed = time.time() - self._batch_stats["start_time"]
+        played = self._batch_stats["songs_played"]
+
+        logger.info("=" * 50)
+        logger.info("🔥 冲榜统计")
+        logger.info("=" * 50)
+        logger.info(f"  完成歌曲: {played} 首")
+        logger.info(f"  失败歌曲: {self._batch_stats['songs_failed']} 首")
+        logger.info(f"  总运行时间: {elapsed:.0f}s ({elapsed/60:.1f}min)")
+        if played > 0:
+            avg_time = self._batch_stats["total_game_time"] / played
+            logger.info(f"  平均每首: {avg_time:.1f}s")
+            logger.info(f"  总点击: {self._batch_stats['total_taps']} 次")
+            logger.info(f"  总 Flick: {self._batch_stats['total_flicks']} 次")
+            logger.info(f"  总长按: {self._batch_stats['total_holds']} 次")
+            logger.info(f"  处理帧数: {self._batch_stats['total_frames']}")
+            logger.info(f"  平均 FPS: "
+                        f"{self._batch_stats['total_frames']/self._batch_stats['total_game_time']:.1f}"
+                        if self._batch_stats['total_game_time'] > 0 else "")
+        logger.info("─" * 40)
+
+    def _cleanup(self):
+        """清理资源。"""
+        self._running = False
+        self.player._running = False
+        self.player._release_all()
+        self.player.analyzer.close()
+        self.player.adb.close_scrcpy()
+
