@@ -1,0 +1,124 @@
+{
+  "doc": "PJSK Auto Player - 冲榜模式流水线 (v3.0.0 Pipeline)",
+  "version": "3.0.0",
+
+  "============================================================": "基础任务",
+
+  "Wait": {
+    "action": "Wait",
+    "doc": "通用等待",
+    "next": ["#next"]
+  },
+
+  "Stop": {
+    "action": "DoNothing",
+    "doc": "停止流水线",
+    "next": []
+  },
+
+  "============================================================": "画面检测任务",
+
+  "DetectGameScreen": {
+    "action": "DoNothing",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "检测是否在打歌画面: 判定线区域有亮像素",
+    "next": ["PlaySong", "DetectResultScreen"],
+    "failed_next": ["DetectResultScreen", "DetectMenuScreen"],
+    "maxRetries": 3,
+    "preDelay": 0,
+    "postDelay": 0
+  },
+
+  "DetectResultScreen": {
+    "action": "DoNothing",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "检测是否在结算画面: 整体高亮 + 判定线区域暗",
+    "next": ["DismissResult", "DetectMenuScreen"],
+    "failed_next": ["DetectMenuScreen", "DetectGameScreen"],
+    "maxRetries": 3
+  },
+
+  "DetectMenuScreen": {
+    "action": "DoNothing",
+    "doc": "检测是否在菜单/选歌画面",
+    "next": ["WaitForNextSong", "DetectGameScreen"],
+    "failed_next": ["DetectGameScreen"],
+    "maxRetries": 3
+  },
+
+  "============================================================": "结算画面处理",
+
+  "WaitResultAnimation": {
+    "action": "Wait",
+    "doc": "等待结算动画播放完毕",
+    "preDelay": 0,
+    "postDelay": 4000,
+    "next": ["DismissResult"]
+  },
+
+  "DismissResult": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "点击结算画面 (点掉分数/结果)",
+    "next": ["CheckAfterDismiss"],
+    "failed_next": ["DismissResult"],
+    "exceeded_next": ["Stop"],
+    "maxRetries": 15,
+    "preDelay": 2500,
+    "postDelay": 500
+  },
+
+  "CheckAfterDismiss": {
+    "action": "DoNothing",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "检查点掉结算后是什么画面",
+    "next": ["WaitForNextSong", "DismissResult"],
+    "failed_next": ["DismissResult", "WaitForNextSong"],
+    "maxRetries": 3
+  },
+
+  "============================================================": "选歌与等待",
+
+  "WaitForNextSong": {
+    "action": "Wait",
+    "doc": "等待下一首歌开始 (用户选歌或自动选歌)",
+    "preDelay": 0,
+    "postDelay": 500,
+    "next": ["DetectGameScreen"],
+    "failed_next": ["DetectGameScreen"],
+    "maxRetries": 30
+  },
+
+  "============================================================": "打歌",
+
+  "PlaySong": {
+    "action": "Tap",
+    "algorithm": "BrightnessDetect",
+    "doc": "打歌: 进入 AutoPlayer 主循环, 检测 note 并触摸",
+    "next": ["DetectResultScreen", "DetectGameScreen"],
+    "failed_next": ["DetectResultScreen"],
+    "maxRetries": 3,
+    "postDelay": 0
+  },
+
+  "============================================================": "冲榜循环",
+
+  "BatchStart": {
+    "action": "DoNothing",
+    "doc": "冲榜起始点",
+    "next": ["WaitForNextSong"],
+    "preDelay": 0,
+    "postDelay": 0
+  },
+
+  "BatchLoop": {
+    "action": "DoNothing",
+    "doc": "冲榜循环体",
+    "next": ["DetectGameScreen"],
+    "maxRetries": 9999
+  }
+}

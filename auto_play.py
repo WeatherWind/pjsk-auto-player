@@ -21,6 +21,13 @@ import cv2
 from adb_controller import ADBController
 from screen_analyzer import ScreenAnalyzer, NoteEvent, GameState
 
+# Pipeline 引擎 (可选, v3.0.0+)
+try:
+    from pipeline import PipelineEngine, PipelineState, TaskDef
+    _HAS_PIPELINE = True
+except ImportError:
+    _HAS_PIPELINE = False
+
 logger = logging.getLogger("pjsk_auto_play")
 
 
@@ -878,6 +885,10 @@ class BatchPlayer:
         self.cfg = config
         self.player = AutoPlayer(config)
 
+        # Pipeline 引擎 (v3.0.0+)
+        self.pipeline: Optional[PipelineEngine] = None
+        self._use_pipeline = False
+
         bp = config.get("batch_play", {})
         self.target_count = song_count or bp.get("default_count", 0)
         self.result_wait = bp.get("result_wait_seconds", 4.0)
@@ -886,6 +897,28 @@ class BatchPlayer:
         self.next_song_timeout = bp.get("next_song_timeout", 30.0)
         self.song_timeout = bp.get("song_timeout", 360)
         self.max_failures = bp.get("max_failures_per_song", 20)
+
+        # 尝试初始化 Pipeline 引擎
+        if _HAS_PIPELINE and bp.get("use_pipeline", True):
+            try:
+                self.pipeline = PipelineEngine(
+                    config,
+                    adb_controller=self.player.adb,
+                    screen_analyzer=self.player.analyzer,
+                )
+
+                # 加载任务定义
+                pipeline_dir = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "tasks"
+                )
+                if os.path.exists(pipeline_dir):
+                    self.pipeline.load_tasks(pipeline_dir)
+                    self._use_pipeline = True
+                    logger.info(f"Pipeline 引擎已初始化 ({len(self.pipeline._tasks)} 个任务)")
+                else:
+                    logger.info("tasks/ 目录不存在, 回退到传统模式")
+            except Exception as e:
+                logger.warning(f"Pipeline 引擎初始化失败: {e}, 回退到传统模式")
 
         self._running = False
         self._batch_stats = {
@@ -926,12 +959,42 @@ class BatchPlayer:
         logger.info("=" * 50)
 
         try:
-            self._auto_play_loop()
+            if self._use_pipeline and self.pipeline:
+                logger.info("使用 Pipeline 引擎执行冲榜...")
+                self._run_with_pipeline()
+            else:
+                self._auto_play_loop()
         except KeyboardInterrupt:
             logger.info("\n收到中断信号...")
         finally:
             self._print_final_stats()
             self._cleanup()
+
+    def _run_with_pipeline(self):
+        """使用 Pipeline 引擎执行冲榜。"""
+        if not self.pipeline:
+            self._auto_play_loop()
+            return
+
+        song_count = 0
+        target = self.target_count
+
+        def on_task(task, result, state):
+            nonlocal song_count
+            if task.name == "PlaySong" and result.matched:
+                # 执行打歌
+                self._play_one_song()
+                song_count += 1
+                logger.info(f"✅ 第 {song_count} 首 完成  "
+                           f"({song_count}/{target if target>0 else '∞'})")
+
+                # 检查是否达到目标
+                if target > 0 and song_count >= target:
+                    logger.info(f"✅ 已完成 {target} 首, 冲榜结束!")
+                    self.pipeline.stop()
+
+        # 注册回调来拦截 PlaySong 任务
+        self.pipeline.run("BatchStart", callback=on_task)
 
     def _auto_play_loop(self):
         """冲榜主循环: 打歌 → 结算 → 下一首。"""
