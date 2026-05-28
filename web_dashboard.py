@@ -54,6 +54,7 @@ def _init_backends():
         log("🔌 检测 ADB...")
         if not _adb.wait_for_device(timeout=15):
             log("❌ 手机未连接，请插入 USB 并开启调试")
+            _start_reconnect_thread()
             return
         try:
             w, h = _adb.get_screen_size()
@@ -78,9 +79,73 @@ def _init_backends():
             log("🤏 minitouch <5ms ✓")
         else:
             log("🤏 ADB input ~50ms")
+        # 速度检测
+        _run_speedtest()
         log("✅ 后端就绪")
+        # 桌面通知
+        _notify("设备已连接", "可以开始冲榜了！")
     except Exception as e:
         log(f"❌ 初始化失败: {e}")
+        _start_reconnect_thread()
+
+
+def _start_reconnect_thread():
+    """启动自动重连线程 (USB 拔线后自动恢复)。"""
+    def watch():
+        global _adb
+        while True:
+            time.sleep(3)
+            try:
+                if _adb and _adb.is_connected():
+                    continue
+                log("🔄 USB 断开, 等待重连...")
+                for _ in range(60):
+                    time.sleep(1)
+                    if _adb and _adb.is_connected():
+                        log("✅ USB 已重连")
+                        _notify("设备已重连", "冲榜继续！")
+                        break
+                else:
+                    log("⏰ 重连超时, 继续等待...")
+            except Exception:
+                pass
+    t = threading.Thread(target=watch, daemon=True)
+    t.start()
+
+
+def _run_speedtest():
+    """速度检测: 测量截图耗时和 FPS。"""
+    global _adb
+    if not _adb:
+        return
+    try:
+        times = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            f = _adb.screencap()
+            if f is not None:
+                times.append((time.perf_counter() - t0) * 1000)
+        if times:
+            avg = sum(times) / len(times)
+            fps = 1000 / avg if avg > 0 else 0
+            log(f"⏱ 截图耗时: {avg:.0f}ms ({fps:.0f} FPS)")
+            # 如果太慢, 建议 scrcpy
+            if avg > 80:
+                log("💡 建议安装 scrcpy 获得更高帧率: brew install scrcpy")
+    except Exception:
+        pass
+
+
+def _notify(title: str, message: str):
+    """发送系统桌面通知。"""
+    try:
+        import subprocess
+        # macOS
+        cmd = ["osascript", "-e",
+               f'display notification "{message}" with title "{title}"']
+        subprocess.run(cmd, capture_output=True, timeout=3)
+    except Exception:
+        pass
 
 
 def cmd_start(song_count=0, combo="", team=""):
@@ -396,6 +461,7 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 <div class="cx">
 <span id="st-bdg" class="bdg bdg-r"><span class="dot dr"></span>未连接</span>
 <button class="btn btn-s btn-p" id="btn-setup" onclick="setup()">🔌 连接设备</button>
+<button class="btn btn-s btn-p" id="btn-fool" onclick="foolMode()" style="display:none">🤖 傻瓜模式</button>
 <button class="btn btn-s btn-p" id="btn-start" onclick="act('start')" style="display:none">▶ 开始冲榜</button>
 <button class="btn btn-s btn-d" id="btn-stop" onclick="act('stop')" style="display:none">⏹ 停止</button>
 <button class="btn btn-s" id="btn-pause" onclick="act('pause')" style="display:none">⏸ 暂停</button>
@@ -454,7 +520,7 @@ async function poll(){try{
 let d=await g('/api/status');
 let e=document.getElementById('st-bdg');let r=d.adb;
 e.innerHTML=r?'<span class="dot dg"></span>已连接':'<span class="dot dr"></span>未连接';e.className='bdg '+(r?'bdg-g':'bdg-r');
-['btn-start','btn-stop','btn-pause'].forEach(id=>document.getElementById(id).style.display=r?'':'none');
+['btn-start','btn-stop','btn-pause','btn-fool'].forEach(id=>document.getElementById(id).style.display=r?'':'none');
 let s=await g('/api/stats');let p=s.running;
 document.getElementById('s-p').textContent=s.songs_played;
 document.getElementById('s-t').textContent=s.target||'∞';
@@ -494,6 +560,54 @@ function quickGo(){let c=document.getElementById('sel-combo').value;let t=docume
 let p=['/api/action?action=start'];if(c)p.push('combo='+c);if(t)p.push('team='+t);if(n>0)p.push('count='+n);fetch(p.join('&'))
 let lb=document.getElementById('log-box');lb.innerHTML='<div class="ll">🚀 启动冲榜...</div>'}
 function esc(s){let d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// ── 傻瓜模式 ──
+async function foolMode(){
+  let lb=document.getElementById('log-box');
+  lb.innerHTML='<div class="ll">🤖 傻瓜模式启动! 全自动进行中...</div>';
+  // 1. 连接设备
+  await fetch('/api/action?action=reconnect');
+  await new Promise(r=>setTimeout(r,3000));
+  // 2. 校准
+  await fetch('/api/action?action=calibrate');
+  await new Promise(r=>setTimeout(r,5000));
+  // 3. 启动冲榜
+  let c=document.getElementById('sel-combo').value||'grind-single';
+  let t=document.getElementById('sel-team').value||'';
+  let n=document.getElementById('inp-count').value||0;
+  let p=['/api/action?action=start','combo='+c];if(t)p.push('team='+t);if(n>0)p.push('count='+n);
+  await fetch(p.join('&'));
+  lb.innerHTML='<div class="ll">🤖 傻瓜模式: 已连接+校准+启动! 坐等收菜~</div>';
+}
+
+// ── 桌面通知 ──
+if(Notification&&Notification.permission==='default')Notification.requestPermission();
+
+// ── 新手引导 ──
+(function(){
+  if(localStorage.getItem('pjsk_tour_done'))return;
+  let ov=document.createElement('div');
+  ov.id='tour-overlay';ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:999;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML=`<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:32px;max-width:480px;text-align:center">
+    <h2 style="color:#58a6ff;margin-bottom:12px">🎵 欢迎使用 PJSK Auto Player</h2>
+    <p style="color:#c9d1d9;font-size:14px;line-height:1.6;margin-bottom:16px">
+      只需三步:<br>
+      1️⃣ 手机插上 USB → 点击「连接设备」<br>
+      2️⃣ 点击「🤖 傻瓜模式」全自动搞定一切<br>
+      3️⃣ 坐等收菜!
+    </p>
+    <p style="color:#8b949e;font-size:12px;margin-bottom:20px">
+      也可手动选歌单/编队后点「一键启动」
+    </p>
+    <button class="btn btn-p" onclick="dismissTour()" style="padding:10px 32px;font-size:15px">🚀 开始使用</button>
+  </div>`;
+  document.body.appendChild(ov);
+})();
+function dismissTour(){
+  document.getElementById('tour-overlay').remove();
+  localStorage.setItem('pjsk_tour_done','1');
+}
+
 loadCombos();loadTeams();loadCfg();loadVT();setTimeout(poll,500)
 </script>
 </body>
