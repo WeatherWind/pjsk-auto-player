@@ -505,20 +505,15 @@ def main():
 
     if not args.command:
         if args.version:
-            version_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        "VERSION")
-            if os.path.exists(version_path):
-                with open(version_path) as f:
+            vp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+            if os.path.exists(vp):
+                with open(vp) as f:
                     print(f"PJSK Auto Player v{f.read().strip()}")
             else:
                 print("PJSK Auto Player (version unknown)")
             return
-        # 无参数时启动 Web UI (开箱即用)
-        print("🚀 启动 Web 控制台...")
-        print("   浏览器打开 http://localhost:8080")
-        print()
-        from web_dashboard import run_server
-        run_server()
+        from web_dashboard import run
+        run()
         return
 
     # profiles 命令不需要加载配置
