@@ -9,13 +9,15 @@
 
 | 版本 | 特性 |
 |------|------|
-| **v3.4.0** 🆕 | 交互式设置向导 + 自动重连 + 终端 UI 优化 |
-| **v3.3.0** | ALAS 式场景分类 + 30-60 FPS scrcpy PPM 后端 + 帧差跳过 + 区域截取 |
-| **v3.2.0** | Web 仪表盘 + Minitouch 一键下载 + PyInstaller 打包 + CI 自动构建 |
-| **v3.1.0** | Minitouch 低延迟触摸 + OCR 积分读取 + Pipeline 子任务弹窗处理 |
-| **v3.0.0** | MAA 启发式流水线引擎 + JSON 任务定义 + 模板匹配 |
-| **v2.0.0** | 冲榜模式: 自动连续打歌 + 结算画面导航 + 会话统计 |
-| **v1.0.0** | 预测引擎 + 热键控制 + 自动校准 + 配置档案 + scrcpy 后端 |
+| 版本 | 特性 |
+|------|------|| **v3.5.0** 🆕 | Windows hotkeys + --version + config validation + web dashboard fix |
+| **v3.4.0** | Interactive setup wizard + auto-reconnect |
+| **v3.3.0** | ALAS-style scene classifier + scrcpy PPM 30-60 FPS |
+| **v3.2.0** | PyInstaller build + GitHub Actions CI + Web dashboard |
+| **v3.1.0** | Minitouch backend + OCR score reader + Pipeline sub-tasks |
+| **v3.0.0** | MAA-inspired pipeline engine + JSON task definitions |
+| **v2.0.0** | Batch play (冲榜) - auto-repeat songs, result screen navigation, session stats |
+| **v1.0.0** | Major upgrade: prediction engine + hotkeys + auto-save calibration + profiles + scrcpy backend |
 
 ## 🔥 主要特性
 
@@ -400,19 +402,28 @@ pip install pyinstaller
 ./dist/pjsk-auto-player-macos auto -n 10
 ```
 
-### 自动构建 (GitHub Actions)
+### 自动构建与发布 (GitHub Actions)
 
-每次推送到 `main` 分支时, CI 自动构建三平台可执行文件并上传为构建产物。
-从 [Actions 页面](https://github.com/WeatherWind/pjsk-auto-player/actions) 可下载最新构建。
+每次推送到 `main` 分支时:
+1. CI 自动构建 **Windows / macOS / Linux** 三平台可执行文件
+2. 自动发布到 GitHub Releases: **Continuous Build** (持续构建)
+3. 可执行文件可直接从 Releases 页面下载
 
-推送 `v*` tag 时, 自动创建 **GitHub Release** 并附带可执行文件:
+推送 `v*` tag 时:
+1. 同样构建三平台可执行文件
+2. 创建 **正式版本 Release** (带有版本号)
+3. 自动生成更新日志 (基于 git log)
 
 ```bash
-git tag v3.4.0
+# 日常更新: 推送后自动构建, 从 Releases 下载
+git push origin main
+
+# 发版: 自动构建 + 正式 Release + 更新日志
+git tag v3.5.0
 git push origin main --tags
 ```
 
-前往 https://github.com/WeatherWind/pjsk-auto-player/releases 下载稳定版本。
+前往 https://github.com/WeatherWind/pjsk-auto-player/releases 下载。
 
 ---
 

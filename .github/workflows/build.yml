@@ -4,9 +4,10 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -38,8 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install opencv-python-headless numpy pyyaml
+          pip install pyinstaller opencv-python-headless numpy pyyaml
 
       - name: Build with PyInstaller
         run: |
@@ -69,53 +69,73 @@ jobs:
             --console \
             main.py
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.artifact_name }}
-          retention-days: 7
+          retention-days: 1  # 只需保留到 release 步骤
 
-  # 每次 push 到 main 时 — 上传构建产物 (可从 Actions 页面下载)
-  # 推 v* tag 时 — 自动创建 GitHub Release
-
+  # ── 每次 push 到 main: 发布到 Releases ──
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: [build]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取所有 tag 用于生成 changelog
 
       - uses: actions/download-artifact@v4
         with:
           pattern: pjsk-auto-player-*
           merge-multiple: true
 
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            # 每次 push 到 main: 用日期+短SHA作为tag
+            TAG="continuous-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "release_name=PJSK Auto Player $TAG" >> $GITHUB_OUTPUT
+
       - name: Generate release notes
         id: notes
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          # 生成 changelog: 从上一个 tag 到当前
-          PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
-          if [ -n "$PREV_TAG" ]; then
-            git log --oneline --no-decorate "$PREV_TAG..HEAD" 2>/dev/null > /tmp/changelog.txt
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # 版本发布: 生成从上一个 tag 到当前的 changelog
+            PREV=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
+            if [ -n "$PREV" ]; then
+              echo "## Changes since $PREV" > /tmp/release_notes.md
+              git log --oneline --no-decorate "$PREV..HEAD" >> /tmp/release_notes.md
+            else
+              echo "Initial release" > /tmp/release_notes.md
+            fi
           else
-            echo "Initial release" > /tmp/changelog.txt
+            # 持续构建: 显示最近 commits
+            echo "## Continuous Build" > /tmp/release_notes.md
+            echo "" >> /tmp/release_notes.md
+            echo "Commit: ${GITHUB_SHA::7}" >> /tmp/release_notes.md
+            echo "Branch: ${{ github.ref_name }}" >> /tmp/release_notes.md
+            echo "" >> /tmp/release_notes.md
+            echo "### Recent commits" >> /tmp/release_notes.md
+            git log --oneline --no-decorate -10 "origin/main" 2>/dev/null >> /tmp/release_notes.md
           fi
-          echo "notes_file=/tmp/changelog.txt" >> $GITHUB_OUTPUT
+          echo "file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Create/Update Release
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ steps.notes.outputs.tag }}
-          name: ${{ steps.notes.outputs.tag }}
-          body_path: /tmp/changelog.txt
-          files: |
+          tag: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.release_name }}
+          bodyFile: /tmp/release_notes.md
+          artifacts: |
             pjsk-auto-player-linux-x86_64
             pjsk-auto-player-macos-universal
             pjsk-auto-player-windows-x86_64.exe
-          generate_release_notes: true
-          make_latest: true
+          allowUpdates: true
+          makeLatest: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
