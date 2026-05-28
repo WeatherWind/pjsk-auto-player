@@ -83,7 +83,7 @@ adb --version
 ### 4. 下载本项目
 
 ```
-git clone https://github.com/yourname/pjsk-auto-player.git
+git clone https://github.com/WeatherWind/pjsk-auto-player.git
 cd pjsk-auto-player
 ```
 
