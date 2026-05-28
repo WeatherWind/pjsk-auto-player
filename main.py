@@ -2,19 +2,17 @@
 """
 PJSK Auto Player - 主入口
 
-基于 ADB + OpenCV 的 Project Sekai (プロジェクトセカイ) 自动打歌工具。
+基于 ADB + OpenCV 的 Project Sekai 自动打歌。
+纯 Web 操控 · 原生窗口 · 无需命令行。
 
 用法:
-    python main.py start                    # 启动自动打歌
-    python main.py start --profile expert   # 使用 expert 配置档案
-    python main.py calibrate                # 运行校准 (延迟/判定线/轨道)
-    python main.py calibrate -i             # 交互式校准 (实时预览)
-    python main.py calibrate --profile expert  # 校准并保存到 expert 档案
-    python main.py test                     # 测试截图和 ADB 连接
-    python main.py test --loop              # 持续截图测试
-    python main.py auto                     # 冲榜模式: 连续打 5 首
-    python main.py auto -n 20              # 连续打 20 首
-    python main.py auto --infinite          # 无限循环
+    python main.py                          # Web 控制台 (原生窗口/浏览器)
+    python main.py --port 9090              # 指定端口
+    python main.py start                    # CLI 模式: 自动打歌
+    python main.py auto                     # CLI 模式: 冲榜
+    python main.py calibrate                # 校准
+    python main.py setup                    # 设置向导
+    python main.py --version                # 版本号
 """
 
 import argparse

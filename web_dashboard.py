@@ -383,7 +383,7 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 </head>
 <body>
 <div class="sb">
-<div class="sbh"><h1>🎵 PJSK</h1><div class="v">v3.9.0</div></div>
+<div class="sbh"><h1>🎵 PJSK</h1><div class="v">v4.0.0 · 原生窗口</div></div>
 <div class="nav a" onclick="sp('dash')"><span>📊</span><span>仪表盘</span></div>
 <div class="nav" onclick="sp('phone')"><span>📸</span><span>手机画面</span></div>
 <div class="nav" onclick="sp('scripts')"><span>🎮</span><span>歌单&编队</span></div>
@@ -501,10 +501,10 @@ loadCombos();loadTeams();loadCfg();loadVT();setTimeout(poll,500)
 
 # ══════════════════════════════════════════
 # 入口
-# ══════════════════════════════════════════
+# ── 入口 ──
 
 
-def run(host: str = "0.0.0.0", port: int = 8080):
+def run(host: str = "0.0.0.0", port: int = 8080, native: bool = True):
     global _cfg
     # 加载配置
     import yaml
@@ -535,6 +535,33 @@ def run(host: str = "0.0.0.0", port: int = 8080):
 
     # HTTP 服务
     server = HTTPServer((host, port), Handler)
+
+    # 尝试以原生窗口启动 (PyWebView)
+    if native and port == 8080:
+        try:
+            import webview
+            _native = True
+            print(f"  ║  🪟 原生窗口模式 (PyWebView)               ║")
+            # 在后台线程启动 HTTP 服务器
+            import threading
+            t = threading.Thread(target=server.serve_forever, daemon=True)
+            t.start()
+            # 创建原生窗口
+            webview.create_window(
+                "PJSK Auto Player",
+                f"http://{host}:{port}",
+                width=960, height=680,
+                resizable=True,
+                min_size=(640, 480),
+            )
+            webview.start()
+            return
+        except ImportError:
+            _native = False
+            print(f"  ║  🌐 浏览器模式 (pip install pywebview 可             ║")
+            print(f"  ║     获得原生窗口体验)                             ║")
+
+    print()
     print()
     print(f"  ╔══════════════════════════════════════════╗")
     print(f"  ║     PJSK Auto Player                     ║")

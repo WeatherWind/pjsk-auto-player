@@ -9,15 +9,14 @@
 
 | 版本 | 特性 |
 |------|------|
-| 版本 | 特性 |
-|------|------|| **v3.5.0** 🆕 | Windows hotkeys + --version + config validation + web dashboard fix |
-| **v3.4.0** | Interactive setup wizard + auto-reconnect |
-| **v3.3.0** | ALAS-style scene classifier + scrcpy PPM 30-60 FPS |
-| **v3.2.0** | PyInstaller build + GitHub Actions CI + Web dashboard |
-| **v3.1.0** | Minitouch backend + OCR score reader + Pipeline sub-tasks |
-| **v3.0.0** | MAA-inspired pipeline engine + JSON task definitions |
-| **v2.0.0** | Batch play (冲榜) - auto-repeat songs, result screen navigation, session stats |
-| **v1.0.0** | Major upgrade: prediction engine + hotkeys + auto-save calibration + profiles + scrcpy backend |
+| **v4.0.0** 🆕 | 纯 Web 操控 + scrcpy/minitouch 自动启用 + 原生窗口 (PyWebView) |
+| **v3.9.0** | 开箱即用: ADB 自动下载 + 一键启动脚本 |
+| **v3.8.0** | MAA 风格 Web 控制台 (完整仪表盘 + 截图 + 配置编辑) |
+| **v3.7.0** | 自动编队系统 (活动/自定义编队 + 角色选择) |
+| **v3.6.0** | 歌单系统 (多曲目自动切换 + 冲榜套餐) |
+| **v3.5.0** | Windows 热键 + --version + 配置校验 |
+| **v3.4.0** | 交互式设置向导 + 自动重连 |
+| **v3.3.0** | ALAS 场景分类 + scrcpy PPM 30-60 FPS |
 
 ## 🔥 主要特性
 

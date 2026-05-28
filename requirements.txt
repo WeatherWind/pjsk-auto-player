@@ -3,5 +3,6 @@ numpy>=1.24.0
 pyyaml>=6.0
 
 # 可选依赖:
-# scipy>=1.10.0    # 用于一键校准轨道位置 (python main.py calibrate)
-# python-scrcpy    # 用于 scrcpy 视频流后端 (30+ FPS, 需额外安装 scrcpy)
+# scipy>=1.10.0       # 一键校准轨道位置
+# python-scrcpy       # scrcpy 视频流后端 (30+ FPS, 需额外安装 scrcpy)
+# pywebview>=4.0      # 原生窗口模式 (替代浏览器)
