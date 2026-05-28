@@ -35,3 +35,6 @@ calibration_*.json
 dist/
 build/
 *.spec
+
+# Cache
+.cache/

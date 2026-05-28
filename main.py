@@ -513,7 +513,12 @@ def main():
             else:
                 print("PJSK Auto Player (version unknown)")
             return
-        parser.print_help()
+        # 无参数时启动 Web UI (开箱即用)
+        print("🚀 启动 Web 控制台...")
+        print("   浏览器打开 http://localhost:8080")
+        print()
+        from web_dashboard import run_server
+        run_server()
         return
 
     # profiles 命令不需要加载配置

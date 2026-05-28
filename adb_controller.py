@@ -33,31 +33,69 @@ class ADBController:
         self.serial = self.cfg.get("device_serial", "").strip()
 
     # ──────────────────────────────────────────
-    # 设备管理
-    # ──────────────────────────────────────────
-
     def _find_adb(self) -> str:
         """查找 adb 可执行文件 (Windows 下为 adb.exe)。"""
         exe = self.cfg.get("executable", "adb")
+        # 如果指定了完整路径, 直接使用
         if os.path.isfile(exe):
             return exe
-        if os.sep in exe or (sys.platform == "win32" and "\\" in exe):
-            return exe
+        # 从 PATH 查找
         which_cmd = "where" if sys.platform == "win32" else "which"
         try:
-            subprocess.run(
-                [which_cmd, exe],
-                capture_output=True,
-                check=True,
-            )
+            subprocess.run([which_cmd, exe], capture_output=True, check=True)
             return exe
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning(
-                f"'{exe}' 未在 PATH 中找到。"
-                "请安装 ADB (https://developer.android.com/studio/command-line/adb)"
-                "或设置 adb.executable 配置项。"
-            )
-            return exe
+            pass
+
+        # 自动下载 ADB
+        logger.info("ADB 未在 PATH 中找到, 尝试自动下载...")
+        downloaded = self._download_adb()
+        if downloaded and os.path.isfile(downloaded):
+            self.executable = downloaded
+            return downloaded
+
+        logger.warning(f"ADB 未找到, 请安装: "
+                       "https://developer.android.com/studio/releases/platform-tools")
+        return exe
+
+    def _download_adb(self) -> str:
+        """自动下载 ADB platform-tools。"""
+        import urllib.request
+        import zipfile
+        import platform as pf
+
+        system = pf.system()
+        url = ""
+        if system == "Darwin":
+            url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+        elif system == "Linux":
+            url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+        elif system == "Windows":
+            url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+        else:
+            return ""
+
+        cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache", "adb")
+        os.makedirs(cache_dir, exist_ok=True)
+        adb_exe = os.path.join(cache_dir, "platform-tools",
+                               "adb.exe" if system == "Windows" else "adb")
+
+        if os.path.isfile(adb_exe):
+            logger.info(f"ADB 已缓存: {adb_exe}")
+            return adb_exe
+
+        zip_path = os.path.join(cache_dir, "platform-tools.zip")
+        try:
+            logger.info(f"下载 ADB: {url}")
+            urllib.request.urlretrieve(url, zip_path)
+            with zipfile.ZipFile(zip_path, "r") as z:
+                z.extractall(cache_dir)
+            os.chmod(adb_exe, 0o755)
+            logger.info(f"ADB 下载完成: {adb_exe}")
+            return adb_exe
+        except Exception as e:
+            logger.warning(f"ADB 下载失败: {e}")
+            return ""
 
     def _adb_cmd(self, *args: str) -> list[str]:
         """构造 adb 命令列表。"""
