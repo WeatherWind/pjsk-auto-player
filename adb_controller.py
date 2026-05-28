@@ -14,6 +14,7 @@ import time
 import logging
 import os
 import sys
+import socket
 import threading
 from typing import Optional
 
@@ -237,10 +238,248 @@ class ADBController:
             self._scrcpy_instance.stop()
 
     # ──────────────────────────────────────────
-    # 触摸操作
+    # Minitouch 后端 (可选, <5ms 触摸延迟)
+    # ──────────────────────────────────────────
+
+    def init_minitouch(self) -> bool:
+        """
+        初始化 minitouch 后端。
+
+        minitouch 是一个运行在安卓设备上的触摸守护进程,
+        通过本地 socket 接收触摸命令, 延迟 <5ms (远快于 ADB input ~50ms)。
+
+        使用方式:
+          1. adb_controller.py 在启动时自动推送 minitouch 到设备
+          2. 启动 minitouch 进程, 建立 socket 连接
+          3. tap() / swipe() 等方法自动切换到 minitouch
+
+        返回是否成功初始化。
+        """
+        self._minitouch_socket: Optional[socket.socket] = None
+        self._minitouch_proc = None
+        self._mt_max_contacts = 2
+        self._mt_max_x = self.screen["width"]
+        self._mt_max_y = self.screen["height"]
+
+        # minitouch 二进制文件路径
+        mt_bin = self.cfg.get("minitouch", {}).get("binary_path", "")
+        if not mt_bin:
+            # 自动查找内置二进制
+            import glob
+            builtin = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "bin", "minitouch")
+            # 尝试根据架构查找
+            arch = self._get_device_arch()
+            if arch:
+                mt_bin = os.path.join(builtin, f"minitouch_{arch}")
+            else:
+                mt_bin = os.path.join(builtin, "minitouch")
+
+        if not os.path.exists(mt_bin):
+            logger.warning(f"minitouch 二进制不存在: {mt_bin}")
+            logger.info("可从 https://github.com/DeviceFarmer/minitouch 下载")
+            logger.info("或设置 adb.minitouch.binary_path")
+            return False
+
+        # 推送二进制到设备
+        remote_path = "/data/local/tmp/minitouch"
+        push_result = subprocess.run(
+            self._adb_cmd("push", mt_bin, remote_path),
+            capture_output=True, text=True, timeout=10
+        )
+        if push_result.returncode != 0:
+            logger.warning(f"minitouch 推送失败: {push_result.stderr.strip()}")
+            return False
+
+        # 设置执行权限
+        subprocess.run(
+            self._adb_cmd("shell", "chmod", "755", remote_path),
+            capture_output=True, timeout=5
+        )
+
+        # 启动 minitouch (后台进程)
+        try:
+            self._minitouch_proc = subprocess.Popen(
+                self._adb_cmd("shell", remote_path),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except Exception as e:
+            logger.warning(f"minitouch 启动失败: {e}")
+            return False
+
+        # 等待 minitouch 启动, 读取输出获取分辨率信息
+        time.sleep(0.5)
+
+        # 通过 ADB forward 建立本地 socket 连接
+        # minitouch 默认监听 localhost:1111
+        forward_result = subprocess.run(
+            self._adb_cmd("forward", "tcp:1111", "tcp:1111"),
+            capture_output=True, text=True, timeout=5
+        )
+        if forward_result.returncode != 0:
+            logger.warning(f"ADB forward 失败: {forward_result.stderr.strip()}")
+            self._cleanup_minitouch()
+            return False
+
+        # 连接 socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect(("127.0.0.1", 1111))
+
+            # 读取 minitouch 协议版本信息
+            # 格式: v <version> <max_contacts> <max_x> <max_y>
+            welcome = b""
+            while b"\n" not in welcome:
+                try:
+                    chunk = sock.recv(1024)
+                    if not chunk:
+                        break
+                    welcome += chunk
+                except socket.timeout:
+                    break
+
+            welcome_str = welcome.decode().strip()
+            logger.info(f"minitouch 已连接: {welcome_str}")
+
+            # 解析协议信息
+            parts = welcome_str.split()
+            if len(parts) >= 4 and parts[0] == "v":
+                self._mt_max_contacts = int(parts[1])
+                self._mt_max_x = int(parts[2])
+                self._mt_max_y = int(parts[3])
+
+            self._minitouch_socket = sock
+            logger.info(f"minitouch 初始化成功 (延迟 <5ms, "
+                        f"触点={self._mt_max_contacts}, "
+                        f"分辨率={self._mt_max_x}x{self._mt_max_y})")
+            return True
+
+        except (socket.error, OSError) as e:
+            logger.warning(f"minitouch socket 连接失败: {e}")
+            self._cleanup_minitouch()
+            return False
+
+    def _get_device_arch(self) -> str:
+        """获取设备 CPU 架构。"""
+        try:
+            result = subprocess.run(
+                self._adb_cmd("shell", "getprop", "ro.product.cpu.abi"),
+                capture_output=True, text=True, timeout=5
+            )
+            arch = result.stdout.strip()
+            # 映射到 minitouch 二进制命名
+            mapping = {
+                "arm64-v8a": "arm64",
+                "armeabi-v7a": "arm",
+                "x86_64": "x86_64",
+                "x86": "x86",
+            }
+            return mapping.get(arch, arch)
+        except Exception:
+            return ""
+
+    def _mt_tap(self, x: int, y: int) -> bool:
+        """通过 minitouch 发送点击事件。"""
+        if not self._minitouch_socket:
+            return self._mt_fallback_tap(x, y)
+        try:
+            # minitouch 协议: d contact x y pressure + c + u contact
+            scaled_x = int(x * self._mt_max_x / self.screen["width"])
+            scaled_y = int(y * self._mt_max_y / self.screen["height"])
+            cmd = f"d 0 {scaled_x} {scaled_y} 50\nc\nu 0\nc\n"
+            self._minitouch_socket.sendall(cmd.encode())
+            return True
+        except (socket.error, OSError) as e:
+            logger.warning(f"minitouch tap 失败: {e}")
+            return self._mt_fallback_tap(x, y)
+
+    def _mt_swipe(self, x1: int, y1: int, x2: int, y2: int,
+                  duration_ms: int = 50) -> bool:
+        """通过 minitouch 发送滑动事件。"""
+        if not self._minitouch_socket:
+            return self._mt_fallback_swipe(x1, y1, x2, y2, duration_ms)
+        try:
+            sx1 = int(x1 * self._mt_max_x / self.screen["width"])
+            sy1 = int(y1 * self._mt_max_y / self.screen["height"])
+            sx2 = int(x2 * self._mt_max_x / self.screen["width"])
+            sy2 = int(y2 * self._mt_max_y / self.screen["height"])
+
+            # 下笔 + 移动 + 抬起
+            cmd = f"d 0 {sx1} {sy1} 50\nc\n"
+
+            # 插值移动
+            steps = max(int(duration_ms / 5), 1)
+            for i in range(1, steps + 1):
+                t = i / steps
+                mx = int(sx1 + (sx2 - sx1) * t)
+                my = int(sy1 + (sy2 - sy1) * t)
+                cmd += f"m 0 {mx} {my} 50\nc\n"
+
+            cmd += "u 0\nc\n"
+
+            self._minitouch_socket.sendall(cmd.encode())
+            time.sleep(duration_ms / 1000.0)
+            return True
+        except (socket.error, OSError) as e:
+            logger.warning(f"minitouch swipe 失败: {e}")
+            return self._mt_fallback_swipe(x1, y1, x2, y2, duration_ms)
+
+    def _mt_press(self, x: int, y: int, duration_ms: int = 100) -> bool:
+        """通过 minitouch 长按。"""
+        if not self._minitouch_socket:
+            return self._mt_fallback_press(x, y, duration_ms)
+        try:
+            sx = int(x * self._mt_max_x / self.screen["width"])
+            sy = int(y * self._mt_max_y / self.screen["height"])
+            cmd = f"d 0 {sx} {sy} 50\nc\n"
+            self._minitouch_socket.sendall(cmd.encode())
+            time.sleep(duration_ms / 1000.0)
+            cmd = f"u 0\nc\n"
+            self._minitouch_socket.sendall(cmd.encode())
+            return True
+        except (socket.error, OSError) as e:
+            logger.warning(f"minitouch press 失败: {e}")
+            return self._mt_fallback_press(x, y, duration_ms)
+
+    def _mt_fallback_tap(self, x, y):
+        """minitouch 不可用时的回退: 使用 ADB input tap。"""
+        return self._adb_tap(x, y)
+
+    def _mt_fallback_swipe(self, x1, y1, x2, y2, duration_ms):
+        return self._adb_swipe(x1, y1, x2, y2, duration_ms)
+
+    def _mt_fallback_press(self, x, y, duration_ms):
+        return self._adb_swipe(x, y, x, y, duration_ms)
+
+    def _cleanup_minitouch(self):
+        """清理 minitouch 进程和 socket。"""
+        if self._minitouch_socket:
+            try:
+                self._minitouch_socket.close()
+            except Exception:
+                pass
+            self._minitouch_socket = None
+        if self._minitouch_proc:
+            try:
+                self._minitouch_proc.terminate()
+            except Exception:
+                pass
+            self._minitouch_proc = None
+
+    # ──────────────────────────────────────────
+    # 触摸操作 (自动选择后端: minitouch > ADB)
     # ──────────────────────────────────────────
 
     def tap(self, x: int, y: int) -> bool:
+        """在 (x, y) 位置点击。自动选择 minitouch 或 ADB。"""
+        if hasattr(self, '_minitouch_socket') and self._minitouch_socket:
+            return self._mt_tap(x, y)
+        return self._adb_tap(x, y)
+
+    def _adb_tap(self, x: int, y: int) -> bool:
         """在 (x, y) 位置点击。"""
         try:
             subprocess.run(
@@ -253,6 +492,13 @@ class ADBController:
             return False
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int,
+              duration_ms: int = 50) -> bool:
+        """从 (x1,y1) 滑动到 (x2,y2)。自动选择 minitouch 或 ADB。"""
+        if hasattr(self, '_minitouch_socket') and self._minitouch_socket:
+            return self._mt_swipe(x1, y1, x2, y2, duration_ms)
+        return self._adb_swipe(x1, y1, x2, y2, duration_ms)
+
+    def _adb_swipe(self, x1: int, y1: int, x2: int, y2: int,
               duration_ms: int = 50) -> bool:
         """从 (x1,y1) 滑动到 (x2,y2), 持续 duration_ms 毫秒。"""
         try:
@@ -271,6 +517,12 @@ class ADBController:
             return False
 
     def press(self, x: int, y: int, duration_ms: int = 100) -> bool:
+        """长按 (x, y) 位置。自动选择 minitouch 或 ADB。"""
+        if hasattr(self, '_minitouch_socket') and self._minitouch_socket:
+            return self._mt_press(x, y, duration_ms)
+        return self._adb_press(x, y, duration_ms)
+
+    def _adb_press(self, x: int, y: int, duration_ms: int = 100) -> bool:
         """长按 (x, y) 位置, 持续 duration_ms 毫秒。"""
         return self.swipe(x, y, x, y, duration_ms)
 

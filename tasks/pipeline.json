@@ -105,12 +105,37 @@
     "postDelay": 0
   },
 
+  "============================================================": "弹窗处理 (子任务)",
+
+  "ClosePopup": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "通用弹窗关闭: 点击画面中央",
+    "next": ["#next"],
+    "maxRetries": 3,
+    "preDelay": 0,
+    "postDelay": 500
+  },
+
+  "DismissRankUp": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "roi": [],
+    "doc": "关闭等级提升/称号获得弹窗",
+    "next": ["#next"],
+    "maxRetries": 5,
+    "preDelay": 1000,
+    "postDelay": 500
+  },
+
   "============================================================": "冲榜循环",
 
   "BatchStart": {
     "action": "DoNothing",
     "doc": "冲榜起始点",
     "next": ["WaitForNextSong"],
+    "sub": ["ClosePopup", "DismissRankUp"],
     "preDelay": 0,
     "postDelay": 0
   },
@@ -119,6 +144,7 @@
     "action": "DoNothing",
     "doc": "冲榜循环体",
     "next": ["DetectGameScreen"],
+    "sub": ["ClosePopup", "DismissRankUp"],
     "maxRetries": 9999
   }
 }

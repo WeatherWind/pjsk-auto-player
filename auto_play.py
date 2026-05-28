@@ -310,6 +310,7 @@ class AutoPlayer:
         self._release_all()
         self.analyzer.close()
         self.adb.close_scrcpy()
+        self.adb._cleanup_minitouch()
 
         elapsed = time.time() - self._stats["start_time"]
         fps_avg = self._stats["frames"] / elapsed if elapsed > 0 else 0
@@ -376,6 +377,15 @@ class AutoPlayer:
             logger.error("截图失败, 请检查设备和 ADB")
             return False
         logger.info(f"截图成功: {test_frame.shape[1]}x{test_frame.shape[0]}")
+
+        # 初始化 minitouch 后端
+        mt_cfg = self.cfg.get("minitouch", {})
+        if mt_cfg.get("auto_init", True):
+            logger.info("初始化 minitouch 后端...")
+            if self.adb.init_minitouch():
+                logger.info("minitouch 已就绪 (触摸延迟 <5ms)")
+            else:
+                logger.info("minitouch 不可用, 使用 ADB input (延迟 ~50ms)")
 
         return True
 

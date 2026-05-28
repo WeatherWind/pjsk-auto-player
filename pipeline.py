@@ -220,6 +220,33 @@ class PipelineEngine:
     def get_task(self, name: str) -> Optional[TaskDef]:
         return self._tasks.get(name)
 
+    def _run_subtasks(self, task: TaskDef):
+        """在任务执行前运行子任务 (用于弹窗检测等)。"""
+        if not task.sub:
+            return
+
+        if not self.adb:
+            return
+
+        frame = self.adb.screencap()
+        if frame is None:
+            return
+
+        for sub_name in task.sub:
+            sub = self._tasks.get(sub_name)
+            if not sub:
+                continue
+
+            # 识别子任务目标
+            matched, x, y, conf = self._recognize(sub, frame)
+            if matched:
+                logger.info(f"[SUB] 子任务触发: {sub_name} @({x},{y}) conf={conf:.2f}")
+                self._execute_action(sub, x, y)
+                # 子任务执行后重新截图
+                frame = self.adb.screencap()
+                if frame is None:
+                    break
+
     # ── 执行 ──
 
     def run(self, start_task: str = "", callback: Callable = None) -> bool:
@@ -296,13 +323,16 @@ class PipelineEngine:
     # ── 任务执行 ──
 
     def _execute_task(self, task: TaskDef) -> TaskResult:
-        """执行单个任务。"""
+        """执行单个任务, 包含子任务处理。"""
         start_time = time.perf_counter()
         result = TaskResult(task_name=task.name)
 
         # 前置延迟
         if task.pre_delay > 0:
             time.sleep(task.pre_delay / 1000.0)
+
+        # 执行子任务 (在主任务之前运行)
+        self._run_subtasks(task)
 
         # 截图 (如果 ADB 可用)
         frame = None
