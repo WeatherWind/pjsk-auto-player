@@ -35,19 +35,28 @@ if ROOT_DIR not in sys.path:
 def main():
     """入口函数。
 
-    无参数时启动桌面模式（开箱即用）。
-    有参数时委派给 cli.py。
+    无参数时启动原生 GUI（像 MAA 一样）。
+    desktop 参数启动 Web 桌面模式。
+    其他参数委派给 cli.py。
     """
-    # 无参数 → 桌面模式
+    # 无参数 → 原生 GUI (MAA 风格)
     if len(sys.argv) <= 1:
+        from native_gui import PjskGui
+        gui = PjskGui()
+        gui.run()
+        return
+
+    # desktop → Web 桌面模式
+    if sys.argv[1] == "desktop":
         from desktop_app import run_desktop
         run_desktop()
         return
 
-    # 有参数 → CLI 模式
-    if sys.argv[1] == "desktop":
-        from desktop_app import run_desktop
-        run_desktop()
+    # gui → 原生 GUI
+    if sys.argv[1] == "gui":
+        from native_gui import PjskGui
+        gui = PjskGui()
+        gui.run()
         return
 
     from cli import main as cli_main

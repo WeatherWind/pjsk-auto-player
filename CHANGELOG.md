@@ -5,6 +5,41 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-05-29
+
+### 🖥️ 原生桌面 GUI — 像 MAA 一样
+
+#### `native_gui.py` (633 行)
+
+- **MAA 风格暗色窗口**: tkinter 原生 GUI，零外部依赖，跨平台 (Win/Mac/Linux)
+- **设备连接面板**: 状态指示灯 + 一键连接 + 分辨率/后端信息显示
+- **打歌控制面板**: 模式选择 (FC/AP/LIVE/AUTO) + 开始/暂停/停止按钮
+- **实时统计面板**: 运行时间、歌曲数、点击数、FPS、错误数
+- **日志面板**: 彩色日志输出 (ERROR 红色/WARNING 橙色/SUCCESS 绿色)，自动滚动，500 行上限
+- **菜单栏**: 文件 (向导/配置/校准) + 控制 (打歌模式) + 视图 (浏览器/清空日志)
+- **线程安全**: 日志队列 (queue.Queue) + 定时刷新 (200ms)，后台操作不阻塞 UI
+- **`main.py` 默认启动**: 无参数 → 原生 GUI；`python main.py desktop` → Web 桌面；`python main.py gui` → 原生 GUI
+
+#### 反检测增强 (`lib/anti_detection.py`, 240 行)
+
+- **贝塞尔曲线滑动**: `bezier_curve()` 三次贝塞尔路径生成，模拟人类手指弧线
+- **HumanTouch 模拟器**: 坐标抖动、时机抖动、长按微动、触摸压力
+- **人类反应时间**: 正态分布延迟 (均值 200ms/标准差 30ms)
+- **漏键概率**: `should_miss()` 按配置概率随机漏键
+- **长按微动序列**: `hold_micro_movements()` 生成持续微动轨迹
+
+#### 自动活动检测 (`handlers/event_detect.py`, 199 行)
+
+- **EventDetector**: HSV 颜色分析识别活动类型 (马拉松/芝士嘉年华/一般)
+- **Banner 颜色签名匹配**: 红色调 → Marathon, 蓝紫色调 → Cheerful
+- **自动选曲推荐**: 马拉松推荐短曲 (效率优先)，芝士推荐高分曲 (队伍加成)
+- **结果缓存**: 5 秒 TTL，避免重复检测
+
+### 📦 构建系统
+
+- `build.spec` 更新: 包含 native_gui, lib/anti_detection, handlers/event_detect
+- PyInstaller 一键构建: `pyinstaller build.spec` 生成 `dist/pjsk-auto-player`
+
 ## [4.11.0] - 2026-05-29
 
 ### 🖥️ 开箱即用桌面体验 — 零命令行

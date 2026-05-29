@@ -6,6 +6,7 @@ PJSK Auto Player — Handler 交互处理器系统
   - goto: 启动游戏 → 登录 → 主页导航
   - select_song: 选歌 → 选难度 → 确认
   - handle_result: 结算画面 → 跳过 → 统计
+  - event_detect: 活动检测 → 自动选曲 → 策略推荐
   - reconnect: 断线检测 → 重连
 
 所有 Handler 继承 BaseHandler，共享 controller + config。
