@@ -12,6 +12,8 @@ PJSK Auto Player — 分层配置系统 (Config V2)
   - 分层合并: default → profile → local → runtime
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import threading

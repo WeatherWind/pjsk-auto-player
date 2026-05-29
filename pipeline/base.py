@@ -106,6 +106,10 @@ class AbstractTask(ABC):
             # 插件后置钩子
             self._invoke_plugins("post_run", context, result)
 
+            # 自动计算执行时长 (如果子类未设置)
+            if result.duration_ms == 0.0:
+                result.duration_ms = (time.perf_counter() - self._start_time) * 1000
+
             self.result = result
             self.status = result.status if result.status != TaskStatus.PENDING else (
                 TaskStatus.SUCCESS if result.success else TaskStatus.FAILED

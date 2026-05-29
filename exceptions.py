@@ -224,6 +224,18 @@ DEFAULT_RECOVERY_STRATEGIES: RecoveryStrategy = {
         "max_retries": 0,
         "description": "停止任务并通知用户",
     },
+    "CONFIG_ERROR": {
+        "action": "stop",
+        "retry_delay": 0,
+        "max_retries": 0,
+        "description": "配置错误，停止并提示修复",
+    },
+    "DEVICE_NOT_CONNECTED": {
+        "action": "stop",
+        "retry_delay": 0,
+        "max_retries": 0,
+        "description": "设备未连接，停止任务",
+    },
 }
 
 

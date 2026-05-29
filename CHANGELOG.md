@@ -5,6 +5,37 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.1.0] - 2026-05-29
+
+### 📱 PWA 手机控制面板 + 🌓 双主题 + 🧪 单元测试
+
+#### PWA 支持
+
+- **`web/manifest.json`**: PWA 配置 (全屏/图标/主题色), 手机可安装为独立应用
+- **`web/sw.js`**: Service Worker 离线缓存 + 网络优先 API 策略
+- **`web/icon-192.png` / `web/icon-512.png`**: PWA 图标 (音符设计)
+- **`web/app.py`**: 新增 `/manifest.json` `/sw.js` `/icon-*.png` 静态文件路由, `_serve_file()` 方法
+- **`dashboard.html`**: PWA meta 标签 (apple-mobile-web-app), 自动注册 Service Worker
+
+#### 亮色/暗色双主题
+
+- **CSS 变量双主题**: `:root` 暗色 + `[data-theme="light"]` 亮色
+- **主题切换按钮**: 右上角 🌙/☀️ 按钮, localStorage 持久化
+- **平滑过渡**: 0.2s transition 动画
+
+#### 单元测试框架
+
+- **`tests/`**: pytest 测试套件 (58 个测试用例)
+  - `test_anti_detection.py` (13 tests): 贝塞尔曲线/抖动/反应时间/漏键/压力
+  - `test_exceptions.py` (17 tests): 异常层级/恢复策略/分类
+  - `test_pipeline.py` (17 tests): TaskDataLoader/@继承/AbstractTask/PackageTask/Timer
+  - `test_config.py` (11 tests): ConfigLoader/深度合并/Schema 校验/前端表单
+- **`tests/conftest.py`**: 共享 fixtures (sample_config, sample_task_def, root_dir)
+- **Bug 修复**:
+  - `exceptions.py`: 补充 CONFIG_ERROR / DEVICE_NOT_CONNECTED 恢复策略
+  - `pipeline/base.py`: `AbstractTask.run()` 自动计算 `duration_ms` (子类未设置时)
+  - `config/__init__.py`: 添加 `from __future__ import annotations` (Python 3.9 兼容)
+
 ## [5.0.0] - 2026-05-29
 
 ### 🖥️ 原生桌面 GUI — 像 MAA 一样

@@ -41,7 +41,8 @@ from .websocket import SSEHandler, push_log
 logger = logging.getLogger("pjsk.web.app")
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
+WEB_DIR = os.path.dirname(os.path.abspath(__file__))
+HTML_PATH = os.path.join(WEB_DIR, "dashboard.html")
 
 # ── 全局状态引用 (由后端在初始化时设置) ──
 _app_instance = None  # PjskApp 实例引用
@@ -103,6 +104,14 @@ class WebHandler(BaseHTTPRequestHandler):
             # ── 仪表盘 HTML ──
             if path == "/":
                 self._serve_html()
+
+            # ── PWA 文件 ──
+            elif path == "/manifest.json":
+                self._serve_file("manifest.json", "application/json")
+            elif path == "/sw.js":
+                self._serve_file("sw.js", "application/javascript")
+            elif path in ("/icon-192.png", "/icon-512.png"):
+                self._serve_file(path.lstrip("/"), "image/png")
 
             # ── SSE 实时事件流 ──
             elif path == "/events":
@@ -195,6 +204,22 @@ class WebHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f.read())
         except FileNotFoundError:
             self.wfile.write(b"<h1>dashboard.html not found</h1>")
+
+    def _serve_file(self, filename: str, content_type: str):
+        """返回 web/ 目录下的静态文件。"""
+        filepath = os.path.join(WEB_DIR, filename)
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+        except FileNotFoundError:
+            self.send_error(404, f"File not found: {filename}")
 
     def _json(self, data: dict):
         """发送 JSON 响应。"""

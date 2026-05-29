@@ -4,9 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PJSK Auto Player — Web GUI V2</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PJSK AP">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 /* ════════════════════════════════════
-   CSS — 现代暗色主题 (仿 MAA/ALAS)
+   CSS — 暗色/亮色双主题
    ════════════════════════════════════ */
 :root {
   --bg:       #0d1117;
@@ -30,6 +37,47 @@
   --radius:   8px;
   --radius-sm: 6px;
 }
+
+/* 亮色主题 */
+[data-theme="light"] {
+  --bg:       #ffffff;
+  --bg2:      #f6f8fa;
+  --bg3:      #f0f2f5;
+  --surface:  #ffffff;
+  --border:   #d0d7de;
+  --border2:  #e8ecf0;
+  --text:     #1f2328;
+  --text2:    #656d76;
+  --text3:    #8b949e;
+  --accent:   #0969da;
+  --accent2:  #0550ae;
+  --green:    #1a7f37;
+  --red:      #cf222e;
+  --orange:   #9a6700;
+  --purple:   #8250df;
+  --cyan:     #1b7c83;
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.theme-toggle:hover { background: var(--bg3); border-color: var(--accent); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -1559,6 +1607,36 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+</script>
+<!-- ════════════════════════════════════
+     主题切换 + PWA 注册
+     ════════════════════════════════════ -->
+<button class="theme-toggle" id="themeToggle" title="切换主题">🌙</button>
+<script>
+// ── 主题切换 ──
+(function(){
+  const btn = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('pjsk-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  btn.textContent = saved === 'light' ? '☀️' : '🌙';
+
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    btn.textContent = next === 'light' ? '☀️' : '🌙';
+    localStorage.setItem('pjsk-theme', next);
+  });
+})();
+
+// ── PWA Service Worker 注册 ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(() => {
+    console.log('📱 PWA Service Worker 已注册');
+  }).catch(() => {
+    // 静默失败 — PWA 非必需
+  });
+}
 </script>
 </body>
 </html>
