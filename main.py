@@ -337,10 +337,28 @@ def cmd_web(config: dict, port: int = 8080, bind: str = "0.0.0.0"):
 def cmd_minitouch_setup(config: dict):
     """下载并配置 minitouch 二进制。"""
     import subprocess
-    from adb_controller import ADBController
 
     print("🔧 Minitouch 设置工具")
     print("=" * 40)
+
+    # 优先使用本地下载脚本 (更可靠)
+    script_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "scripts", "download_minitouch.sh"
+    )
+    if os.path.exists(script_path):
+        print("📥 使用本地下载脚本...")
+        result = subprocess.run(
+            ["bash", script_path],
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        if result.returncode == 0:
+            print("✅ minitouch 已就绪, 路径: bin/minitouch/")
+            print("   启动打歌时自动推送和使用")
+            return
+
+    # 回退: 通过 ADB 检测设备架构后下载
+    from adb_controller import ADBController
 
     adb = ADBController(config)
 

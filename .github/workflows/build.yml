@@ -41,14 +41,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller opencv-python-headless numpy pyyaml
 
+      - name: Pre-download minitouch binaries
+        run: |
+          bash scripts/download_minitouch.sh
+
       - name: Build with PyInstaller
         run: |
-          # 打包 README / TERMS / CHANGELOG 到可执行文件中
+          # 打包 README / TERMS / CHANGELOG / VERSION / minitouch 到可执行文件中
           pyinstaller \
             --onefile \
             --name "${{ matrix.artifact_name }}" \
             --add-data "tasks:tasks" \
             --add-data "templates:templates" \
+            --add-data "bin:bin" \
             --add-data "README.md:." \
             --add-data "TERMS.md:." \
             --add-data "CHANGELOG.md:." \

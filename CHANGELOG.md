@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [4.7.0] - 2026-05-29
+
+### 📦 Minitouch 预编译二进制
+
+- **下载脚本**: `scripts/download_minitouch.sh` — 一键下载 arm64/arm/x86_64/x86 四架构 minitouch 二进制
+- **多源下载**: 自动尝试 DeviceFarmer/minitouch release + MAA maatouch fork, 任意源可用即可
+- **CI 预下载**: GitHub Actions 构建时自动运行下载脚本, minitouch 打包进可执行文件
+- **本地优先**: `python main.py minitouch-setup` 优先使用本地脚本, 无需联网检测设备架构
+- **build.spec 自动下载**: 构建时若 bin/minitouch/ 为空, 自动触发下载
+- **无缝集成**: 开箱即用, 无需手动下载 minitouch
+
 ## [4.6.0] - 2026-05-29
 
 ### 🎵 谱面缓存 (Song Profile Cache)
