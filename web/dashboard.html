@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PJSK Auto Player — Web GUI V2</title>
+<style>
+/* ════════════════════════════════════
+   CSS — 现代暗色主题 (仿 MAA/ALAS)
+   ════════════════════════════════════ */
+:root {
+  --bg:       #0d1117;
+  --bg2:      #161b22;
+  --bg3:      #1c2128;
+  --surface:  #161b22;
+  --border:   #30363d;
+  --border2:  #21262d;
+  --text:     #c9d1d9;
+  --text2:    #8b949e;
+  --text3:    #6e7681;
+  --accent:   #58a6ff;
+  --accent2:  #1f6feb;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --orange:   #d29922;
+  --purple:   #bc8cff;
+  --cyan:     #56d4dd;
+  --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono:     'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  --radius:   8px;
+  --radius-sm: 6px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Layout ── */
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.3px;
+}
+
+.sidebar-header .version {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.sidebar-header .connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.online { background: var(--green); box-shadow: 0 0 6px rgba(63,185,80,.4); }
+.status-dot.offline { background: var(--red); box-shadow: 0 0 6px rgba(248,81,73,.4); }
+.status-dot.connecting { background: var(--orange); animation: pulse 1.5s ease infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 8px 0;
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13px;
+  border-left: 3px solid transparent;
+  transition: all .15s ease;
+  user-select: none;
+}
+
+.nav-item:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.nav-item.active {
+  color: var(--text);
+  border-left-color: var(--accent);
+  background: var(--bg3);
+}
+
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+}
+
+/* ── Main Content ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  min-width: 0;
+}
+
+/* ── Pages ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Stats Grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 4px;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  background: transparent;
+  color: var(--text);
+  transition: all .15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover { background: var(--bg3); border-color: var(--text3); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  background: var(--accent2);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover { background: var(--accent); }
+
+.btn-danger {
+  background: rgba(248,81,73,.15);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-danger:hover { background: rgba(248,81,73,.25); }
+
+.btn-success {
+  background: rgba(63,185,80,.15);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.btn-success:hover { background: rgba(63,185,80,.25); }
+
+.btn-warning {
+  background: rgba(210,153,34,.15);
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.btn-warning:hover { background: rgba(210,153,34,.25); }
+
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+.btn-lg { padding: 10px 28px; font-size: 15px; }
+
+/* ── Flex / Grid helpers ── */
+.flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.flex-center { display: flex; justify-content: center; align-items: center; gap: 8px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.gap-4 { gap: 4px; }
+.w-full { width: 100%; }
+.text-muted { color: var(--text2); font-size: 12px; }
+.text-accent { color: var(--accent); }
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badge-green { background: rgba(63,185,80,.12); color: var(--green); }
+.badge-red { background: rgba(248,81,73,.12); color: var(--red); }
+.badge-yellow { background: rgba(210,153,34,.12); color: var(--orange); }
+.badge-blue { background: rgba(88,166,255,.12); color: var(--accent); }
+
+/* ── Log Box ── */
+.log-box {
+  background: #010409;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-entry { padding: 1px 0; }
+.log-ts { color: var(--text3); margin-right: 6px; }
+.log-level { display: inline-block; width: 44px; font-weight: 600; }
+.log-level.info { color: var(--accent); }
+.log-level.warning { color: var(--orange); }
+.log-level.error { color: var(--red); }
+.log-level.debug { color: var(--text3); }
+.log-level.success { color: var(--green); }
+.log-msg { color: var(--text); }
+
+/* ── Form Controls ── */
+.form-group { margin-bottom: 10px; }
+.form-group label {
+  display: block;
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.form-input, .form-select {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+}
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(88,166,255,.15);
+}
+textarea.form-input {
+  min-height: 300px;
+  font-family: var(--mono);
+  font-size: 12px;
+  resize: vertical;
+  line-height: 1.5;
+}
+input[type="number"].form-input { width: 80px; }
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px; height: 16px;
+}
+
+/* ── Screenshot ── */
+.screenshot-container {
+  text-align: center;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  margin-top: 8px;
+}
+.screenshot-img {
+  max-width: 100%;
+  max-height: 55vh;
+  border-radius: 4px;
+  display: block;
+  margin: 0 auto;
+}
+.screenshot-info {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 6px;
+}
+
+/* ── Canvas Chart ── */
+.chart-container {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  position: relative;
+}
+.chart-container canvas {
+  width: 100% !important;
+  height: 140px !important;
+  display: block;
+}
+
+/* ── Config Editor ── */
+.config-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── Task Table ── */
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.task-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.task-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border2);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.task-table tr:last-child td { border-bottom: none; }
+
+/* ── Slider ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 4px rgba(0,0,0,.3);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── Notification Toast ── */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  animation: slideIn .3s ease;
+  pointer-events: auto;
+  max-width: 360px;
+}
+.toast-info { background: var(--accent2); color: #fff; border: 1px solid var(--accent); }
+.toast-error { background: rgba(248,81,73,.2); color: var(--red); border: 1px solid var(--red); }
+.toast-success { background: rgba(63,185,80,.2); color: var(--green); border: 1px solid var(--green); }
+.toast-warning { background: rgba(210,153,34,.2); color: var(--orange); border: 1px solid var(--orange); }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .sidebar { width: 56px; min-width: 56px; }
+  .sidebar-header h1, .sidebar-header .version, .sidebar-header .connection-status span,
+  .nav-item span:last-child, .sidebar-footer { display: none; }
+  .nav-item { padding: 12px; justify-content: center; }
+  .nav-item .icon { font-size: 18px; width: auto; }
+  .main { padding: 12px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .main { padding: 8px; }
+  .card { padding: 12px; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ═══ Sidebar ═══ -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>🎵 PJSK</h1>
+      <div class="version" id="sidebar-version">v4.3.0</div>
+      <div class="connection-status">
+        <span class="status-dot offline" id="status-dot"></span>
+        <span id="status-text">未连接</span>
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-item active" onclick="switchPage('dashboard')">
+        <span class="icon">📊</span><span>仪表盘</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('live')">
+        <span class="icon">📸</span><span>实时画面</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('tasks')">
+        <span class="icon">🎮</span><span>任务面板</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('stats')">
+        <span class="icon">📈</span><span>性能统计</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('config')">
+        <span class="icon">⚙️</span><span>配置</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('logs')">
+        <span class="icon">📋</span><span>日志</span>
+      </div>
+      <div class="nav-item" onclick="switchPage('about')">
+        <span class="icon">ℹ️</span><span>关于</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">Web GUI V2 · SSE</div>
+  </div>
+
+  <!-- ═══ Main Content ═══ -->
+  <div class="main">
+
+    <!-- ════════════ Dashboard ════════════ -->
+    <div id="page-dashboard" class="page active">
+
+      <!-- 控制栏 -->
+      <div class="flex-between mb-12">
+        <div class="flex-row">
+          <span id="dash-badge" class="badge badge-red">
+            <span class="status-dot offline" id="dash-dot"></span>
+            <span id="dash-status-text">离线</span>
+          </span>
+          <span class="text-muted" id="dash-device-info"></span>
+        </div>
+        <div class="flex-row">
+          <button class="btn btn-sm btn-primary" onclick="sendCommand('reconnect')">🔌 连接</button>
+          <button class="btn btn-sm btn-success" onclick="sendCommand('start')" id="btn-start-main">▶ 开始</button>
+          <button class="btn btn-sm btn-warning" onclick="sendCommand('pause')" id="btn-pause-main">⏸ 暂停</button>
+          <button class="btn btn-sm btn-danger" onclick="sendCommand('stop')" id="btn-stop-main">⏹ 停止</button>
+        </div>
+      </div>
+
+      <!-- 任务面板 (MAA 风格) -->
+      <div class="card" style="padding: 0; overflow: hidden;">
+        <table class="task-table">
+          <tr>
+            <th style="width: 40px;"></th>
+            <th>步骤</th>
+            <th>配置</th>
+            <th style="text-align: right;">状态</th>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" id="chk-calibrate" checked></td>
+            <td><div style="font-weight: 600;">📏 校准</div><div class="text-muted">测量延迟 + 判定线</div></td>
+            <td>
+              <div class="flex-row">
+                <span class="text-muted">亮度阈值</span>
+                <input type="range" id="cal-threshold" min="150" max="250" value="200" style="width: 80px;" oninput="document.getElementById('cal-thr-val').textContent=this.value">
+                <span id="cal-thr-val" class="text-accent">200</span>
+              </div>
+            </td>
+            <td style="text-align: right;"><span id="st-cal" class="badge badge-red" style="font-size: 11px;">待执行</span></td>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" id="chk-team"></td>
+            <td><div style="font-weight: 600;">👥 编队</div><div class="text-muted">应用编队模板</div></td>
+            <td>
+              <select class="form-select" id="task-team" style="width: auto; padding: 4px 8px; font-size: 12px;" onchange="document.getElementById('chk-team').checked = true">
+                <option value="">-- 不编队 --</option>
+              </select>
+            </td>
+            <td style="text-align: right;"><span id="st-team" class="badge" style="font-size: 11px; background: transparent; color: var(--text3);">跳过</span></td>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" id="chk-combo" checked></td>
+            <td><div style="font-weight: 600;">🎵 选歌</div><div class="text-muted">歌单 / 自动切歌</div></td>
+            <td>
+              <div class="flex-row">
+                <select class="form-select" id="task-combo" style="width: auto; padding: 4px 8px; font-size: 12px;"></select>
+                <select class="form-select" id="task-diff" style="width: auto; padding: 4px 8px; font-size: 12px;">
+                  <option value="any">任意</option>
+                  <option value="easy">EASY</option>
+                  <option value="normal">NORMAL</option>
+                  <option value="hard">HARD</option>
+                  <option value="expert" selected>EXPERT</option>
+                  <option value="master">MASTER</option>
+                </select>
+              </div>
+            </td>
+            <td style="text-align: right;"><span id="st-combo" class="badge" style="font-size: 11px; background: transparent; color: var(--text3);">待开始</span></td>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" id="chk-play" checked></td>
+            <td><div style="font-weight: 600;">▶ 打歌</div><div class="text-muted">自动冲榜</div></td>
+            <td>
+              <div class="flex-row">
+                <span class="text-muted">次数</span>
+                <input type="number" class="form-input" id="task-count" value="10" min="0" style="width: 60px; padding: 4px 6px;">
+                <label class="flex-row gap-4" style="cursor: pointer; font-size: 12px; color: var(--text2);">
+                  <input type="checkbox" id="task-infinite" onchange="document.getElementById('task-count').disabled=this.checked"> 无限
+                </label>
+                <span class="text-muted">模式</span>
+                <select class="form-select" id="task-mode" style="width: auto; padding: 4px 8px; font-size: 12px;">
+                  <option value="FC">FC</option>
+                  <option value="AP">AP</option>
+                  <option value="LIVE">LIVE</option>
+                  <option value="AUTO">AUTO</option>
+                </select>
+              </div>
+            </td>
+            <td style="text-align: right;"><span id="st-play" class="badge" style="font-size: 11px; background: transparent; color: var(--text3);">待开始</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- 开始按钮 -->
+      <div class="flex-center mt-8 mb-12">
+        <button class="btn btn-primary btn-lg" id="btn-go" onclick="runTaskPipeline()">🚀 一键执行</button>
+        <button class="btn btn-sm" onclick="quickStart()">⚡ 快速启动</button>
+      </div>
+
+      <!-- 实时状态 -->
+      <div class="card">
+        <div class="flex-between mb-8">
+          <span class="card-title" style="margin: 0;">实时状态</span>
+          <div class="flex-row text-muted" style="font-size: 12px;">
+            <span>FPS: <b id="dash-fps" class="text-accent">0</b></span>
+            <span>已打: <b id="dash-done" class="text-accent">0</b></span>
+            <span>点击: <b id="dash-taps" class="text-accent">0</b></span>
+            <span>耗时: <b id="dash-time" class="text-accent">0s</b></span>
+          </div>
+        </div>
+
+        <!-- 实时帧预览 -->
+        <div class="screenshot-container" style="margin-bottom: 8px;">
+          <img id="dash-preview" class="screenshot-img" src="" alt="实时画面" style="max-height: 30vh;">
+          <div class="screenshot-info" id="dash-preview-info">等待画面...</div>
+        </div>
+
+        <!-- 性能折线图 -->
+        <div class="chart-container">
+          <canvas id="perf-chart"></canvas>
+        </div>
+
+        <!-- 日志 -->
+        <div class="log-box mt-8" id="dash-log-box">
+          <div class="log-entry"><span class="log-msg">准备就绪，等待连接...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ 实时画面 ════════════ -->
+    <div id="page-live" class="page">
+      <div class="flex-between mb-12">
+        <span class="card-title" style="margin: 0;">📸 手机实时画面</span>
+        <div class="flex-row">
+          <button class="btn btn-sm btn-primary" onclick="refreshScreenshot()">📸 刷新</button>
+          <label class="flex-row gap-4" style="cursor: pointer; font-size: 12px; color: var(--text2);">
+            <input type="checkbox" id="ss-auto" checked onchange="toggleAutoSS()"> 自动 ({{ ssInterval }}ms)
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="screenshot-container">
+          <img id="live-screenshot" class="screenshot-img" src="" alt="手机画面">
+          <div class="screenshot-info" id="live-ss-info">点击刷新获取画面</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ 任务面板 ════════════ -->
+    <div id="page-tasks" class="page">
+      <div class="card">
+        <div class="card-title">🚀 快速启动</div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>模式</label>
+            <select class="form-select" id="sel-mode">
+              <option value="FC">FC — Full Combo</option>
+              <option value="AP">AP — All Perfect</option>
+              <option value="LIVE">LIVE — 通关保底</option>
+              <option value="AUTO">AUTO — 自动选择</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>歌单</label>
+            <select class="form-select" id="sel-combo"></select>
+          </div>
+          <div class="form-group">
+            <label>编队</label>
+            <select class="form-select" id="sel-team"></select>
+          </div>
+          <div class="form-group">
+            <label>打歌次数 (0 = 无限)</label>
+            <input type="number" class="form-input" id="inp-count" value="10" min="0">
+          </div>
+        </div>
+        <div class="flex-row mt-8" style="gap: 8px;">
+          <button class="btn btn-primary" onclick="quickGo()">🚀 一键启动</button>
+          <button class="btn btn-sm" onclick="sendCommand('calibrate')">📏 校准</button>
+          <button class="btn btn-sm" onclick="autoSpeed()">🎯 检测游戏速度</button>
+        </div>
+        <div id="speed-result" class="text-muted mt-8"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎵 歌单列表</div>
+        <div id="combo-list" class="text-muted" style="font-size: 12px;">加载中...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">👥 编队列表</div>
+        <div id="team-list" class="text-muted" style="font-size: 12px;">加载中...</div>
+      </div>
+    </div>
+
+    <!-- ════════════ 性能统计 ════════════ -->
+    <div id="page-stats" class="page">
+      <div class="card">
+        <div class="card-title">📊 冲榜总览</div>
+        <div class="stats-grid">
+          <div class="stat-item"><div class="stat-value" id="st-total">-</div><div class="stat-label">总曲数</div></div>
+          <div class="stat-item"><div class="stat-value" id="st-duration">-</div><div class="stat-label">总时长 (分钟)</div></div>
+          <div class="stat-item"><div class="stat-value" id="st-avg-dur">-</div><div class="stat-label">平均时长 (s)</div></div>
+          <div class="stat-item"><div class="stat-value" id="st-avg-tap">-</div><div class="stat-label">平均点击</div></div>
+          <div class="stat-item"><div class="stat-value" id="st-total-taps">-</div><div class="stat-label">总点击</div></div>
+          <div class="stat-item"><div class="stat-value" id="st-total-flicks">-</div><div class="stat-label">总滑条</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 模式分布</div>
+        <div class="stats-grid" id="mode-dist"></div>
+      </div>
+      <div class="card">
+        <div class="flex-between mb-8">
+          <span class="card-title" style="margin: 0;">📜 最近记录 (50 首)</span>
+          <button class="btn btn-sm btn-danger" onclick="clearHistory()">🗑️ 清空</button>
+        </div>
+        <div class="log-box" id="history-list" style="max-height: 300px; font-size: 12px;">暂无数据</div>
+      </div>
+    </div>
+
+    <!-- ════════════ 配置 ════════════ -->
+    <div id="page-config" class="page">
+      <div class="card">
+        <div class="flex-between mb-8">
+          <span class="card-title" style="margin: 0;">⚙️ config.yaml</span>
+          <span class="text-muted" style="font-size: 11px;">编辑后点击保存生效</span>
+        </div>
+        <textarea class="form-input" id="cfg-editor" spellcheck="false"></textarea>
+        <div class="config-actions">
+          <button class="btn btn-primary btn-sm" onclick="saveConfig()">💾 保存</button>
+          <button class="btn btn-sm" onclick="loadConfig()">🔄 刷新</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ 日志 ════════════ -->
+    <div id="page-logs" class="page">
+      <div class="flex-between mb-12">
+        <span class="card-title" style="margin: 0;">📋 运行日志</span>
+        <button class="btn btn-sm" onclick="clearLogBox()">🗑️ 清空</button>
+      </div>
+      <div class="card">
+        <div class="log-box" id="full-log-box" style="max-height: 60vh; font-size: 12px;">
+          <div class="log-entry"><span class="log-msg">准备就绪...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ 关于 ════════════ -->
+    <div id="page-about" class="page">
+      <div class="card" style="text-align: center;">
+        <h2 style="color: var(--accent); margin-bottom: 4px;">🎵 PJSK Auto Player</h2>
+        <p class="text-muted" style="font-size: 14px;" id="about-version">v4.3.0</p>
+        <p style="font-size: 13px; margin: 10px 0; line-height: 1.6;">
+          基于 ADB+OpenCV 的 Project Sekai 自动打歌工具<br>
+          预测引擎 · Pipeline 流水线 · 冲榜 · 反封号
+        </p>
+        <p style="font-size: 13px;">
+          <a href="https://github.com/WeatherWind/pjsk-auto-player" target="_blank" style="color: var(--accent);">GitHub</a>
+        </p>
+        <div style="margin-top: 16px; text-align: left;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr><td style="padding: 6px 12px; color: var(--accent); font-weight: 600;">版本</td><td id="about-v" style="padding: 6px 12px;">v4.3.0</td></tr>
+            <tr><td style="padding: 6px 12px; color: var(--accent); font-weight: 600;">Web GUI</td><td style="padding: 6px 12px;">V2 — 现代暗色一站式控制面板</td></tr>
+            <tr><td style="padding: 6px 12px; color: var(--accent); font-weight: 600;">引擎</td><td style="padding: 6px 12px;">SSE 实时推送 + Canvas 图表</td></tr>
+            <tr><td style="padding: 6px 12px; color: var(--accent); font-weight: 600;">连接数</td><td id="about-clients" style="padding: 6px 12px;">0</td></tr>
+          </table>
+        </div>
+        <div id="vt" style="margin-top: 16px; text-align: left;"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   JS — 单页应用逻辑
+   ═══════════════════════════════════════════════ */
+
+// ── State ──
+const STATE = {
+  connected: false,
+  running: false,
+  paused: false,
+  fps: 0,
+  songsPlayed: 0,
+  totalTaps: 0,
+  uptime: 0,
+  // Performance chart data
+  perfData: { fps: [], clicks: [], latency: [], labels: [] },
+  maxDataPoints: 60,
+  // SSE
+  sse: null,
+  sseReconnectTimer: null,
+  // Auto screenshot
+  ssTimer: null,
+  ssInterval: 2000,
+};
+
+// ── Toast Notifications ──
+function toast(message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, duration);
+}
+
+// ── Page Switching ──
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelector(`.nav-item[onclick*="'${name}'"]`).classList.add('active');
+  if (name === 'stats') loadSongStats();
+  if (name === 'tasks') { loadCombos(); loadTeams(); }
+}
+
+// ── HTTP helpers ──
+async function apiGet(path) {
+  const r = await fetch(path);
+  return await r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return await r.json();
+}
+
+function sendCommand(action, extra = {}) {
+  return apiPost('/command', { action, ...extra });
+}
+
+// ── Escape HTML ──
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Format time ──
+function fmtTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h${m}m${s}s`;
+  if (m > 0) return `${m}m${s}s`;
+  return `${s}s`;
+}
+
+// ════════════════════════════════════════════════════
+// SSE — 实时事件流
+// ════════════════════════════════════════════════════
+
+function connectSSE() {
+  if (STATE.sse) {
+    STATE.sse.close();
+  }
+
+  STATE.sse = new EventSource('/events');
+
+  STATE.sse.onopen = function() {
+    console.log('[SSE] Connected');
+    STATE.sseReconnectTimer = null;
+  };
+
+  STATE.sse.onmessage = function(event) {
+    try {
+      const msg = JSON.parse(event.data);
+      handleSSEMessage(msg);
+    } catch (e) {
+      console.warn('[SSE] Parse error:', e);
+    }
+  };
+
+  STATE.sse.onerror = function() {
+    console.warn('[SSE] Connection error, reconnecting...');
+    STATE.sse.close();
+    STATE.sse = null;
+    // Auto-reconnect after 2s
+    if (!STATE.sseReconnectTimer) {
+      STATE.sseReconnectTimer = setTimeout(connectSSE, 2000);
+    }
+  };
+}
+
+function handleSSEMessage(msg) {
+  const { event, data } = msg;
+  if (!event) return;
+
+  switch (event) {
+    case 'connected':
+      toast('SSE 已连接', 'success');
+      break;
+
+    case 'status':
+      updateStatus(data);
+      break;
+
+    case 'frame':
+      updateFrame(data);
+      break;
+
+    case 'log':
+      appendLog(data);
+      break;
+
+    case 'stats':
+      updatePerfStats(data);
+      break;
+
+    case 'config':
+      if (data && data.content) {
+        document.getElementById('cfg-editor').value = data.content;
+      }
+      break;
+
+    default:
+      break;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Status / Polling
+// ════════════════════════════════════════════════════
+
+async function pollStatus() {
+  try {
+    const status = await apiGet('/status');
+    updateStatus(status);
+  } catch (e) {
+    // Silent
+  }
+}
+
+function updateStatus(status) {
+  const connected = status.adb || false;
+  STATE.connected = connected;
+  STATE.running = status.running || false;
+  STATE.paused = status.paused || false;
+
+  // Sidebar status
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  dot.className = 'status-dot ' + (connected ? 'online' : 'offline');
+  text.textContent = connected ? '已连接' : '未连接';
+
+  // Dashboard badge
+  const dashBadge = document.getElementById('dash-badge');
+  const dashDot = document.getElementById('dash-dot');
+  const dashText = document.getElementById('dash-status-text');
+  dashDot.className = 'status-dot ' + (connected ? 'online' : 'offline');
+  dashText.textContent = connected ? '已连接' : '离线';
+  dashBadge.className = 'badge ' + (connected ? 'badge-green' : 'badge-red');
+
+  // Device info
+  const devInfo = document.getElementById('dash-device-info');
+  devInfo.textContent = status.screen ? '📱 ' + status.screen : '';
+
+  // Buttons
+  document.getElementById('btn-start-main').disabled = STATE.running;
+  document.getElementById('btn-stop-main').disabled = !STATE.running;
+  document.getElementById('btn-pause-main').textContent = STATE.paused ? '▶ 继续' : '⏸ 暂停';
+
+  // FPS & progress
+  if (STATE.running) {
+    // Update from /stats
+    apiGet('/stats').then(s => {
+      STATE.fps = s.fps || 0;
+      STATE.songsPlayed = s.songs_played || 0;
+      STATE.totalTaps = s.total_taps || 0;
+      STATE.uptime = s.elapsed_seconds || 0;
+      updateDashboardStats();
+    }).catch(() => {});
+  }
+
+  // Version
+  if (status.version) {
+    document.getElementById('sidebar-version').textContent = 'v' + status.version;
+    document.getElementById('about-version').textContent = 'v' + status.version;
+    document.getElementById('about-v').textContent = 'v' + status.version;
+  }
+  // Client count
+  if (status.clients !== undefined) {
+    document.getElementById('about-clients').textContent = status.clients;
+  }
+}
+
+function updateDashboardStats() {
+  document.getElementById('dash-fps').textContent = STATE.fps.toFixed(1);
+  document.getElementById('dash-done').textContent = STATE.songsPlayed;
+  document.getElementById('dash-taps').textContent = STATE.totalTaps;
+  document.getElementById('dash-time').textContent = fmtTime(STATE.uptime);
+
+  // Add to chart
+  addPerfDataPoint(STATE.fps, STATE.totalTaps, 0);
+}
+
+// ════════════════════════════════════════════════════
+// Screenshot / Frame Preview
+// ════════════════════════════════════════════════════
+
+function updateFrame(data) {
+  if (data && data.image) {
+    const img = document.getElementById('dash-preview');
+    img.src = 'data:image/jpeg;base64,' + data.image;
+    document.getElementById('dash-preview-info').textContent = (data.w || '?') + 'x' + (data.h || '?');
+  }
+}
+
+async function refreshScreenshot() {
+  try {
+    const d = await apiGet('/screenshot');
+    if (d.image) {
+      document.getElementById('live-screenshot').src = 'data:image/jpeg;base64,' + d.image;
+      document.getElementById('live-ss-info').textContent = (d.w || '?') + 'x' + (d.h || '?') + '  ' + new Date().toLocaleTimeString();
+    }
+  } catch (e) {
+    // Silent
+  }
+}
+
+function toggleAutoSS() {
+  if (document.getElementById('ss-auto').checked) {
+    STATE.ssTimer = setInterval(refreshScreenshot, STATE.ssInterval);
+  } else {
+    if (STATE.ssTimer) { clearInterval(STATE.ssTimer); STATE.ssTimer = null; }
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Performance Chart (Canvas)
+// ════════════════════════════════════════════════════
+
+let perfCanvas = null;
+let perfCtx = null;
+
+function initPerfChart() {
+  const canvas = document.getElementById('perf-chart');
+  if (!canvas) return;
+  perfCanvas = canvas;
+  perfCtx = canvas.getContext('2d');
+  resizePerfChart();
+  drawPerfChart();
+}
+
+function resizePerfChart() {
+  if (!perfCanvas) return;
+  const rect = perfCanvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  perfCanvas.width = rect.width * dpr;
+  perfCanvas.height = 140 * dpr;
+  perfCanvas.style.width = rect.width + 'px';
+  perfCanvas.style.height = '140px';
+  perfCtx.scale(dpr, dpr);
+}
+
+function addPerfDataPoint(fps, clicks, latency) {
+  const data = STATE.perfData;
+  const now = new Date();
+  data.labels.push(now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  data.fps.push(fps);
+  data.clicks.push(clicks);
+  data.latency.push(latency);
+
+  if (data.fps.length > STATE.maxDataPoints) {
+    data.labels.shift();
+    data.fps.shift();
+    data.clicks.shift();
+    data.latency.shift();
+  }
+
+  drawPerfChart();
+}
+
+function drawPerfChart() {
+  const ctx = perfCtx;
+  if (!ctx) return;
+  const canvas = perfCanvas;
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  const pad = { top: 20, right: 12, bottom: 24, left: 40 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, w, h);
+
+  const data = STATE.perfData;
+  if (data.fps.length < 2) {
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('等待数据...', w / 2, h / 2 + 4);
+    return;
+  }
+
+  // Grid
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < 4; y++) {
+    const yy = pad.top + (ch / 4) * y;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, yy);
+    ctx.lineTo(w - pad.right, yy);
+    ctx.stroke();
+  }
+
+  // Helper: map data to coords
+  const maxVal = Math.max(60, ...data.fps, ...data.clicks) * 1.1;
+  const len = data.fps.length;
+  const step = cw / Math.max(len - 1, 1);
+
+  function points(arr) {
+    return arr.map((v, i) => ({
+      x: pad.left + i * step,
+      y: pad.top + ch - (v / maxVal) * ch,
+    }));
+  }
+
+  // Draw FPS line
+  const fpsPoints = points(data.fps);
+  if (fpsPoints.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#3fb950';
+    ctx.lineWidth = 2;
+    ctx.moveTo(fpsPoints[0].x, fpsPoints[0].y);
+    for (let i = 1; i < fpsPoints.length; i++) {
+      ctx.lineTo(fpsPoints[i].x, fpsPoints[i].y);
+    }
+    ctx.stroke();
+  }
+
+  // Draw clicks line
+  const clickPoints = points(data.clicks);
+  if (clickPoints.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(clickPoints[0].x, clickPoints[0].y);
+    for (let i = 1; i < clickPoints.length; i++) {
+      ctx.lineTo(clickPoints[i].x, clickPoints[i].y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Labels
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('FPS (' + data.fps[data.fps.length - 1].toFixed(1) + ')', pad.left + 4, pad.top - 4);
+  ctx.fillStyle = '#58a6ff';
+  ctx.fillText('Clicks', pad.left + 80, pad.top - 4);
+
+  // X axis labels
+  ctx.fillStyle = '#6e7681';
+  ctx.textAlign = 'center';
+  if (data.labels.length > 1) {
+    ctx.fillText(data.labels[0], pad.left, h - 4);
+    ctx.fillText(data.labels[data.labels.length - 1], w - pad.right, h - 4);
+  }
+}
+
+function updatePerfStats(stats) {
+  if (!stats) return;
+  // Update perf chart with new data
+}
+
+// ════════════════════════════════════════════════════
+// Log
+// ════════════════════════════════════════════════════
+
+function appendLog(data) {
+  if (!data || !data.message) return;
+  const level = data.level || 'info';
+  const ts = data.ts || new Date().toLocaleTimeString();
+  const msg = data.message;
+
+  const html = `<div class="log-entry"><span class="log-ts">[${esc(ts)}]</span><span class="log-level ${level}">${esc(level.toUpperCase())}</span><span class="log-msg">${esc(msg)}</span></div>`;
+
+  // Dashboard log
+  const dashLog = document.getElementById('dash-log-box');
+  if (dashLog) {
+    dashLog.insertAdjacentHTML('beforeend', html);
+    dashLog.scrollTop = dashLog.scrollHeight;
+    // Limit entries
+    while (dashLog.children.length > 200) {
+      dashLog.removeChild(dashLog.firstChild);
+    }
+  }
+
+  // Full log
+  const fullLog = document.getElementById('full-log-box');
+  if (fullLog) {
+    fullLog.insertAdjacentHTML('beforeend', html);
+    fullLog.scrollTop = fullLog.scrollHeight;
+    while (fullLog.children.length > 500) {
+      fullLog.removeChild(fullLog.firstChild);
+    }
+  }
+}
+
+function clearLogBox() {
+  document.getElementById('full-log-box').innerHTML = '<div class="log-entry"><span class="log-msg">日志已清空</span></div>';
+}
+
+// ════════════════════════════════════════════════════
+// Task Pipeline (一键执行)
+// ════════════════════════════════════════════════════
+
+async function runTaskPipeline() {
+  const btn = document.getElementById('btn-go');
+  btn.textContent = '⏳ 执行中...';
+  btn.disabled = true;
+
+  try {
+    // 1. Connect
+    appendLog({ message: '🔄 连接设备...', level: 'info', ts: new Date().toLocaleTimeString() });
+    await sendCommand('reconnect');
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 2. Calibrate
+    if (document.getElementById('chk-calibrate').checked) {
+      const st = document.getElementById('st-cal');
+      st.className = 'badge badge-yellow'; st.textContent = '⏳ 进行中';
+      appendLog({ message: '📏 开始校准...', level: 'info', ts: new Date().toLocaleTimeString() });
+      await sendCommand('calibrate');
+      await new Promise(r => setTimeout(r, 6000));
+      st.className = 'badge badge-green'; st.textContent = '✅ 完成';
+    }
+
+    // 3. Team
+    if (document.getElementById('chk-team').checked) {
+      const team = document.getElementById('task-team').value;
+      if (team) {
+        const st = document.getElementById('st-team');
+        st.className = 'badge badge-yellow'; st.textContent = '⏳ 进行中';
+        appendLog({ message: `👥 应用编队: ${team}`, level: 'info', ts: new Date().toLocaleTimeString() });
+        await sendCommand('team', { team });
+        await new Promise(r => setTimeout(r, 3000));
+        st.className = 'badge badge-green'; st.textContent = '✅ 完成';
+      }
+    }
+
+    // 4. Play
+    if (document.getElementById('chk-play').checked) {
+      const combo = document.getElementById('task-combo').value || '';
+      const count = document.getElementById('task-infinite').checked ? 0 : parseInt(document.getElementById('task-count').value) || 10;
+      const mode = document.getElementById('task-mode').value || 'FC';
+      const st = document.getElementById('st-play');
+      st.className = 'badge badge-yellow'; st.textContent = '▶ 运行中';
+      appendLog({ message: `🚀 启动冲榜 (mode=${mode}, count=${count})`, level: 'info', ts: new Date().toLocaleTimeString() });
+      await sendCommand('start', { mode, count, combo });
+    }
+
+    toast('✅ 任务队列已启动', 'success');
+  } catch (e) {
+    toast('❌ 执行失败: ' + e, 'error');
+  }
+
+  btn.textContent = '🚀 一键执行';
+  btn.disabled = false;
+}
+
+function quickStart() {
+  const mode = document.getElementById('task-mode').value || 'FC';
+  const count = document.getElementById('task-infinite').checked ? 0 : parseInt(document.getElementById('task-count').value) || 10;
+  const combo = document.getElementById('task-combo').value || '';
+  sendCommand('start', { mode, count, combo });
+  toast(`🚀 启动: ${mode} x${count > 0 ? count : '∞'}`, 'info');
+}
+
+function quickGo() {
+  const mode = document.getElementById('sel-mode').value || 'FC';
+  const combo = document.getElementById('sel-combo').value || '';
+  const team = document.getElementById('sel-team').value || '';
+  const count = parseInt(document.getElementById('inp-count').value) || 0;
+  const cmd = { action: 'start', mode, count };
+  if (combo) cmd.combo = combo;
+  if (team) cmd.team = team;
+  apiPost('/command', cmd).then(r => {
+    if (r.ok) toast('🚀 冲榜已启动', 'success');
+    else toast('❌ ' + (r.error || '启动失败'), 'error');
+  }).catch(e => toast('❌ ' + e, 'error'));
+}
+
+async function autoSpeed() {
+  const el = document.getElementById('speed-result');
+  el.textContent = '⏳ 检测中... 请确保在打歌界面 (约8秒)';
+  try {
+    const d = await apiGet('/auto-speed');
+    if (d.detected) {
+      el.innerHTML = '✅ 检测成功! 速度: ' + d.avg_velocity + ' px/s<br>已自动更新配置文件';
+      setTimeout(loadConfig, 500);
+    } else {
+      el.textContent = '❌ ' + (d.message || '检测失败, 请确保在打歌界面');
+    }
+  } catch (e) {
+    el.textContent = '❌ 检测失败: ' + e;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Config
+// ════════════════════════════════════════════════════
+
+async function loadConfig() {
+  try {
+    const d = await apiGet('/config');
+    document.getElementById('cfg-editor').value = d.content || '';
+  } catch (e) {
+    toast('加载配置失败', 'error');
+  }
+}
+
+async function saveConfig() {
+  const content = document.getElementById('cfg-editor').value;
+  try {
+    const r = await apiPost('/config', { content: content });
+    if (r.ok) toast('💾 配置已保存', 'success');
+    else toast('❌ 保存失败: ' + (r.error || ''), 'error');
+  } catch (e) {
+    toast('❌ 保存失败: ' + e, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Combos & Teams
+// ════════════════════════════════════════════════════
+
+async function loadCombos() {
+  try {
+    const d = await apiGet('/combos');
+    const sel1 = document.getElementById('task-combo');
+    const sel2 = document.getElementById('sel-combo');
+    const list = document.getElementById('combo-list');
+    sel1.innerHTML = '<option value="">默认</option>';
+    if (sel2) sel2.innerHTML = '<option value="">-- 无歌单 --</option>';
+    list.innerHTML = '';
+    if (d.combos && d.combos.length) {
+      d.combos.forEach(c => {
+        sel1.innerHTML += `<option value="${esc(c.key)}">${esc(c.name)} (${c.songs}首)</option>`;
+        if (sel2) sel2.innerHTML += `<option value="${esc(c.key)}">${esc(c.name)}</option>`;
+        list.innerHTML += `<div style="padding: 6px 0; border-bottom: 1px solid var(--border2);">
+          <strong>${esc(c.name)}</strong> <span class="text-muted">${c.songs}首</span>
+          ${c.description ? '<div class="text-muted" style="font-size: 11px;">'+esc(c.description)+'</div>' : ''}
+        </div>`;
+      });
+    } else {
+      list.innerHTML = '<div class="text-muted">暂无歌单</div>';
+    }
+  } catch (e) {
+    console.warn('loadCombos:', e);
+  }
+}
+
+async function loadTeams() {
+  try {
+    const d = await apiGet('/teams');
+    const sel1 = document.getElementById('task-team');
+    const sel2 = document.getElementById('sel-team');
+    const list = document.getElementById('team-list');
+    sel1.innerHTML = '<option value="">-- 不编队 --</option>';
+    if (sel2) sel2.innerHTML = '<option value="">-- 无编队 --</option>';
+    list.innerHTML = '';
+    if (d.teams && d.teams.length) {
+      d.teams.forEach(t => {
+        sel1.innerHTML += `<option value="${esc(t.key)}">${esc(t.name)}</option>`;
+        if (sel2) sel2.innerHTML += `<option value="${esc(t.key)}">${esc(t.name)}</option>`;
+        list.innerHTML += `<div style="padding: 6px 0; border-bottom: 1px solid var(--border2);">
+          <strong>${esc(t.name)}</strong> <span class="text-muted">${t.method || ''}</span>
+          ${t.description ? '<div class="text-muted" style="font-size: 11px;">'+esc(t.description)+'</div>' : ''}
+        </div>`;
+      });
+    } else {
+      list.innerHTML = '<div class="text-muted">暂无编队</div>';
+    }
+  } catch (e) {
+    console.warn('loadTeams:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Song Stats & History
+// ════════════════════════════════════════════════════
+
+async function loadSongStats() {
+  try {
+    const d = await apiGet('/song-stats');
+    if (!d.total_songs) return;
+    document.getElementById('st-total').textContent = d.total_songs;
+    document.getElementById('st-duration').textContent = d.total_duration || 0;
+    document.getElementById('st-avg-dur').textContent = d.avg_duration || 0;
+    document.getElementById('st-avg-tap').textContent = d.avg_taps || 0;
+    document.getElementById('st-total-taps').textContent = d.total_taps || 0;
+    document.getElementById('st-total-flicks').textContent = d.total_flicks || 0;
+
+    // Mode distribution
+    const md = document.getElementById('mode-dist');
+    md.innerHTML = '';
+    const colors = { 'AP': '#3fb950', 'FC': '#58a6ff', 'LIVE': '#d29922', 'AUTO': '#bc8cff' };
+    if (d.mode_distribution) {
+      for (const [mode, count] of Object.entries(d.mode_distribution)) {
+        md.innerHTML += `<div class="stat-item">
+          <div class="stat-value" style="color: ${colors[mode] || 'var(--text)'}">${count}</div>
+          <div class="stat-label">${mode}</div>
+        </div>`;
+      }
+    }
+
+    // History
+    const hist = await apiGet('/history');
+    const hl = document.getElementById('history-list');
+    if (hist.history && hist.history.length) {
+      hl.innerHTML = hist.history.slice().reverse().map(s => {
+        const t = new Date((s.timestamp || 0) * 1000);
+        return `<div class="log-entry" style="border-bottom: 1px solid var(--border2); padding: 3px 0;">
+          <span class="log-ts">${t.toLocaleTimeString()}</span>
+          <span class="log-msg">${s.mode || '?'} 点${s.taps||0} 划${s.flicks||0} 按${s.holds||0}
+          <span class="text-muted">${s.duration ? Math.round(s.duration)+'s' : ''}</span></span>
+        </div>`;
+      }).join('');
+    } else {
+      hl.innerHTML = '<div class="log-entry"><span class="log-msg">暂无数据</span></div>';
+    }
+  } catch (e) {
+    console.warn('loadSongStats:', e);
+  }
+}
+
+async function clearHistory() {
+  if (!confirm('确定清空所有历史记录？')) return;
+  await sendCommand('clear-history');
+  loadSongStats();
+  toast('🗑️ 历史已清空', 'success');
+}
+
+// ════════════════════════════════════════════════════
+// Versions
+// ════════════════════════════════════════════════════
+
+async function loadVersions() {
+  try {
+    const d = await apiGet('/versions');
+    let html = '<table style="width: 100%; border-collapse: collapse;">';
+    if (d.versions && d.versions.length) {
+      d.versions.forEach(v => {
+        html += `<tr>
+          <td style="padding: 4px 8px; font-weight: 600;">${esc(v.tag)}</td>
+          <td style="padding: 4px 8px; color: var(--text2);">${esc(v.date)}</td>
+          <td style="padding: 4px 8px; color: var(--text2); font-size: 12px;">${esc((v.message||'').slice(0, 60))}</td>
+        </tr>`;
+      });
+    }
+    html += '</table>';
+    document.getElementById('vt').innerHTML = html;
+  } catch (e) {
+    console.warn('loadVersions:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// Initialization
+// ════════════════════════════════════════════════════
+
+// Polling fallback (SSE can miss the first few messages)
+setInterval(pollStatus, 2000);
+
+// Auto screenshot on live page
+setInterval(() => {
+  if (document.getElementById('page-live').classList.contains('active') &&
+      document.getElementById('ss-auto').checked) {
+    refreshScreenshot();
+  }
+}, STATE.ssInterval);
+
+// Periodic stats update when running
+setInterval(() => {
+  if (STATE.running) {
+    apiGet('/stats').then(s => {
+      STATE.fps = s.fps || 0;
+      STATE.songsPlayed = s.songs_played || 0;
+      STATE.totalTaps = s.total_taps || 0;
+      STATE.uptime = s.elapsed_seconds || 0;
+      updateDashboardStats();
+    }).catch(() => {});
+  }
+}, 3000);
+
+// Init
+function init() {
+  connectSSE();
+  initPerfChart();
+  loadConfig();
+  loadCombos();
+  loadTeams();
+  loadVersions();
+  pollStatus();
+
+  // Resize chart on window resize
+  window.addEventListener('resize', () => {
+    resizePerfChart();
+    drawPerfChart();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -5,6 +5,36 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [4.9.0] - 2026-05-29
+
+### 🏗️ 一站式重构: MAA/ALAS/MaaFramework 融合架构
+
+#### 新架构 (33 新文件)
+
+- **配置系统 V2** (`config/`): 分层配置 (默认→Profile→本地→运行时), 热加载 ConfigWatcher
+- **控制器抽象层** (`controller/`): BaseController → ADB / scrcpy / Combined (智能路由)
+- **Pipeline V2** (`pipeline/`): @继承语法, 节点生命周期, AOP 插件系统, 任务调度器
+- **场景检测 V2** (`scene/`): 多算法加权投票 (模板/颜色/亮度), 状态机 + 滞回防抖
+- **图像识别引擎 V2** (`vision/`): TemplateMatcher 多尺度, OCR 数字/文字, ColorDetector HSV/RGB
+- **Web GUI V2** (`web/`): 暗色现代面板, SSE 实时推送, Canvas 性能图表
+- **设置向导 V2** (`wizard/`): 5 步傻瓜式 (语言→连接→校准→模式→保存)
+- **通知系统** (`notification/`): 桌面通知 (macOS/Windows/Linux) + Web 推送
+
+#### 新增 ALAS 启发模式
+
+- **Button 声明式 UI** (`vision/button.py`): `PjskButton(area, color, button, template)` 支持颜色检测/模板匹配/二值化匹配
+- **Timer 双定时器** (`pipeline/timer.py`): `Timer(limit, count)` 时间和次数双重条件, FrameTimer
+- **Handler 处理器** (`handlers/`): GotoHandler (游戏启动/导航), ResultHandler (结算/分数)
+- **分级异常** (`exceptions.py`): 8 种异常 + 恢复策略注册表
+- **CLI 守护进程** (`cli.py`): start/auto/web/daemon/setup/config/status/stop 子命令
+
+#### 构建与发布
+
+- **CI/CD 更新**: 仅 tag 触发, macOS .dmg 自动生成, 完整 Release Notes
+- **build.spec**: 包含全部 v4.9.0 模块隐藏导入
+- **build.sh**: 本地打包 + .dmg 创建
+- **gitignore**: 排除 config/profiles/ logs/ debug/ *.dmg
+
 ## [4.8.1] - 2026-05-29
 
 ### 🔧 Code Review & Bugfix

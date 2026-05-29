@@ -1,0 +1,157 @@
+# PJSK Auto Player — 默认配置 (Config V2)
+#
+# 分层配置系统:
+#   1. config/default.yaml      — 内置默认 (只读模板)
+#   2. config/profiles/<name>.yaml — 用户档案
+#   3. config/local.yaml        — 本地覆盖 (.gitignore 后可用)
+#   4. 运行时覆盖 (--set key=val)
+#
+# 所有坐标均使用相对比例 0.0~1.0
+# 运行时自动乘以屏幕分辨率
+
+# ============================================================
+# ADB 配置
+# ============================================================
+adb:
+  executable: "adb"           # ADB 路径 (PATH 或绝对路径)
+  device_serial: ""           # 设备序列号 (多设备时必填)
+  screencap_method: "auto"    # auto | exec-out | file | scrcpy
+  temp_dir: "/sdcard/"
+  auto_connect: true          # 启动时自动连接
+  reconnect_delay: 2.0        # 断线后重试间隔 (秒)
+  max_reconnect_attempts: 30  # 最大重连次数
+
+# ============================================================
+# scrcpy 后端
+# ============================================================
+scrcpy:
+  executable: "scrcpy"
+  max_fps: 60
+  bit_rate: 12000000
+  scale: 0.5
+  frame_skip: true
+  auto_install: true          # 未安装时自动提示安装
+
+# ============================================================
+# Minitouch
+# ============================================================
+minitouch:
+  auto_push: true
+  binary_path: "bin/minitouch"
+  port: 1111
+
+# ============================================================
+# 屏幕参数 (根据手机分辨率设置)
+# ============================================================
+screen:
+  width: 1080
+  height: 2400
+
+  # 判定线 Y 坐标 (相对比例 0~1)
+  judgment_line_y: 0.78
+
+  # 判定线上方检测区比例 (note 出现区)
+  detection_top_ratio: 0.35
+
+  # 判定线数量
+  lane_count: 5
+
+  # 判定线左右边界 (相对比例)
+  lane_start_ratio: 0.05
+  lane_end_ratio: 0.95
+
+# ============================================================
+# 打歌设置
+# ============================================================
+play:
+  # 模式: ap | fc | live | auto (自动浮动)
+  mode: "live"
+
+  # 冲榜: 自动无限循环
+  infinite: false
+
+  # 歌单: 要打的歌曲列表 (空 = 手动选)
+  combo_songs: []
+
+  # 反检测点击随机化
+  randomize_clicks: true
+  jitter_ms: 15              # 时机抖动 ±ms
+  position_jitter_px: 5     # 坐标偏移 ±px
+  miss_rate: 0.001           # 随机漏键率 0.1%
+  hold_jitter_ms: 30         # 长按时长抖动
+
+  # 结算点击间隔 (秒)
+  result_click_delay_min: 0.5
+  result_click_delay_max: 2.0
+
+# ============================================================
+# PID 自适应延迟
+# ============================================================
+pid:
+  enabled: true
+  kp: 0.3
+  ki: 0.05
+  kd: 0.1
+  auto_tune: true
+  samples_per_song: 50
+
+# ============================================================
+# Pipeline 任务系统
+# ============================================================
+pipeline:
+  task_timeout: 300          # 单任务超时 (秒)
+  default_retry_times: 5     # 默认重试次数
+  screenshot_interval: 0.1   # 截图间隔 (秒)
+
+# ============================================================
+# 场景检测
+# ============================================================
+scene:
+  detection_interval: 0.05   # 检测帧间隔 (秒)
+  stuck_threshold: 15        # 连续多少帧无变化视为卡住
+  confidence_threshold: 0.85 # 识别置信度阈值
+  algorithms:
+    - template               # 模板匹配
+    - brightness             # 亮度检测
+    - color                  # 颜色检测
+
+# ============================================================
+# Web 控制面板
+# ============================================================
+web:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"
+  dark_mode: true
+  auto_open_browser: false
+
+# ============================================================
+# 通知
+# ============================================================
+notification:
+  desktop: true
+  sound: true
+  on_complete: true
+  on_error: true
+
+# ============================================================
+# 日志
+# ============================================================
+logging:
+  level: "INFO"
+  file: "logs/pjsk.log"
+  max_bytes: 10485760
+  backup_count: 5
+  save_screenshots_on_error: true
+
+# ============================================================
+# 热键
+# ============================================================
+hotkeys:
+  pause: "p"
+  quit: "q"
+  delay_up: "="
+  delay_down: "-"
+  threshold_up: "."
+  threshold_down: ","
+  mode_cycle: "m"

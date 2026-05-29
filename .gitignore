@@ -37,5 +37,21 @@ dist/
 build/
 *.spec
 
+# Config (local overrides + profiles)
+config/local.yaml
+config/profiles/
+profiles/
+
+# Logs
+logs/
+*.log
+
+# Debug screenshots
+debug/
+
+# DMG build artifacts
+dmg-root/
+*.dmg
+
 # Cache
 .cache/

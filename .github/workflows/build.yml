@@ -2,9 +2,13 @@ name: Build & Release
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v4.9.0)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -20,15 +24,21 @@ jobs:
           - os: ubuntu-latest
             artifact_name: pjsk-auto-player-linux
             asset_name: pjsk-auto-player-linux-x86_64
+            asset_mime: application/octet-stream
           - os: macos-latest
             artifact_name: pjsk-auto-player-macos
             asset_name: pjsk-auto-player-macos-universal
+            create_dmg: true
+            dmg_name: pjsk-auto-player-macos-universal.dmg
           - os: windows-latest
             artifact_name: pjsk-auto-player.exe
             asset_name: pjsk-auto-player-windows-x86_64.exe
+            asset_mime: application/octet-stream
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -36,7 +46,7 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller opencv-python-headless numpy pyyaml
@@ -46,14 +56,17 @@ jobs:
           bash scripts/download_minitouch.sh
 
       - name: Build with PyInstaller
+        env:
+          PJSK_BUILD: ci
         run: |
-          # 打包 README / TERMS / CHANGELOG / VERSION / minitouch 到可执行文件中
           pyinstaller \
             --onefile \
             --name "${{ matrix.artifact_name }}" \
             --add-data "tasks:tasks" \
             --add-data "templates:templates" \
             --add-data "bin:bin" \
+            --add-data "config:config" \
+            --add-data "resource:resource" \
             --add-data "README.md:." \
             --add-data "TERMS.md:." \
             --add-data "CHANGELOG.md:." \
@@ -71,6 +84,33 @@ jobs:
             --hidden-import capture_optimizer \
             --hidden-import setup_wizard \
             --hidden-import scrcpy_controller \
+            --hidden-import app \
+            --hidden-import cli \
+            --hidden-import exceptions \
+            --hidden-import config \
+            --hidden-import controller \
+            --hidden-import controller.base \
+            --hidden-import controller.adb \
+            --hidden-import controller.scrcpy \
+            --hidden-import controller.combined \
+            --hidden-import pipeline.base \
+            --hidden-import pipeline.process \
+            --hidden-import pipeline.node \
+            --hidden-import pipeline.plugins \
+            --hidden-import pipeline.task_data \
+            --hidden-import pipeline.scheduler \
+            --hidden-import scene.classifier \
+            --hidden-import scene.states \
+            --hidden-import scene.transitions \
+            --hidden-import vision.matcher \
+            --hidden-import vision.ocr \
+            --hidden-import vision.color \
+            --hidden-import vision.scene \
+            --hidden-import web.app \
+            --hidden-import web.websocket \
+            --hidden-import wizard.setup \
+            --hidden-import notification.desktop \
+            --hidden-import notification.web \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module scipy \
@@ -80,16 +120,48 @@ jobs:
             --console \
             main.py
 
+      - name: Create macOS .dmg (if applicable)
+        if: matrix.create_dmg
+        run: |
+          VERSION=$(cat VERSION)
+          DMG_NAME="${{ matrix.dmg_name }}"
+          EXEC_PATH="dist/${{ matrix.artifact_name }}"
+          mkdir -p dmg-root
+          cp "$EXEC_PATH" dmg-root/pjsk-auto-player
+          cp README.md TERMS.md CHANGELOG.md VERSION dmg-root/
+          chmod +x dmg-root/pjsk-auto-player
+
+          # Create .dmg using hdiutil (macOS built-in)
+          hdiutil create \
+            -volname "PJSK Auto Player v${VERSION}" \
+            -srcfolder dmg-root \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+
+          mv "$DMG_NAME" "dist/$DMG_NAME"
+          echo "dmg_created=true" >> $GITHUB_ENV
+          echo "dmg_path=dist/$DMG_NAME" >> $GITHUB_ENV
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.artifact_name }}
-          retention-days: 1
+          retention-days: 7
 
-  # ── Release: 每次 push 到 main 都发布 ──
+      - name: Upload .dmg artifact (macOS)
+        if: matrix.create_dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.dmg_name }}
+          path: dist/${{ matrix.dmg_name }}
+          retention-days: 7
+
+  # ── Release: 仅在 tag push 时创建正式 Release ──
   release:
     needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -101,30 +173,37 @@ jobs:
           pattern: pjsk-auto-player-*
           merge-multiple: true
 
-      - name: Bundle legal docs with release
+      - name: Bundle legal docs
         run: |
           cp README.md TERMS.md CHANGELOG.md VERSION .
 
-      - name: Determine release tag
-        id: tag
-        run: |
-          VERSION=$(cat VERSION)
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG="${{ github.ref_name }}"
-          else
-            # 持续构建: 用版本号+日期
-            TAG="continuous-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "release_name=PJSK Auto Player v${VERSION} ($TAG)" >> $GITHUB_OUTPUT
-
-      - name: Generate release notes from CHANGELOG
+      - name: Generate release notes
         id: notes
         run: |
           python3 scripts/gen_release_notes.py
           echo "file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
 
-      - name: Create/Update Release
+      - name: Detect tag version
+        id: tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_name=PJSK Auto Player v${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build asset list
+        id: assets
+        run: |
+          ASSETS=""
+          for f in pjsk-auto-player-linux-x86_64 pjsk-auto-player-macos-universal pjsk-auto-player-windows-x86_64.exe pjsk-auto-player-macos-universal.dmg README.md TERMS.md CHANGELOG.md VERSION; do
+            if [ -f "$f" ]; then
+              ASSETS="${ASSETS}${f}\n"
+            fi
+          done
+          printf "assets<<ASSETS_EOF\n$ASSETS\nASSETS_EOF\n" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.tag.outputs.tag }}
@@ -134,10 +213,11 @@ jobs:
             pjsk-auto-player-linux-x86_64
             pjsk-auto-player-macos-universal
             pjsk-auto-player-windows-x86_64.exe
+            pjsk-auto-player-macos-universal.dmg
             README.md
             TERMS.md
             CHANGELOG.md
             VERSION
-          allowUpdates: true
-          makeLatest: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          allowUpdates: false
+          makeLatest: true
+          prerelease: false
