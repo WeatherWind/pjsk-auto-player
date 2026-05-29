@@ -30,6 +30,7 @@ Thumbs.db
 .batch_stats.json
 .batch_action.json
 calibration_*.json
+.legal_agreed
 
 # Build artifacts
 dist/

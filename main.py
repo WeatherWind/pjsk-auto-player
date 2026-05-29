@@ -5,6 +5,11 @@ PJSK Auto Player - 主入口
 基于 ADB + OpenCV 的 Project Sekai 自动打歌。
 纯 Web 操控 · 原生窗口 · 无需命令行。
 
+法律提示:
+  使用本软件可能违反 Project Sekai (SEGA/Colorful Palette) 的服务条款。
+  请仔细阅读 TERMS.md 和 README.md 中的免责声明后使用。
+  开发者不对任何账号封禁或其他后果负责。
+
 用法:
     python main.py                          # Web 控制台 (原生窗口/浏览器)
     python main.py --port 9090              # 指定端口
@@ -130,6 +135,50 @@ def list_profiles():
 
 
 # ──────────────────────────────────────────
+# 法律合规确认 (首次使用提示)
+# ──────────────────────────────────────────
+
+
+AGREED_FLAG = ".legal_agreed"
+
+
+def _check_legal_acknowledgment() -> bool:
+    """检查用户是否已确认法律条款。首次运行显示提示。"""
+    flag_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), AGREED_FLAG)
+    if os.path.exists(flag_path):
+        return True
+
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║  ⚠️  法律提示 / Legal Notice                        ║")
+    print("  ║                                                     ║")
+    print("  ║  PJSK Auto Player 是一个自动化工具。                ║")
+    print("  ║  根据 Project Sekai 利用規約第9条:                  ║")
+    print("  ║  「自動操作ツール（マクロ）の利用」被明确禁止。    ║")
+    print("  ║                                                     ║")
+    print("  ║  使用本软件可能导致账号封禁。                       ║")
+    print("  ║  请仔细阅读 TERMS.md 了解完整条款。                 ║")
+    print("  ║                                                     ║")
+    print("  ║  开发者不对任何账号损失承担责任。                   ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print("  输入 Y 确认已了解风险并继续, 其他任意键退出")
+    ans = input("  [y/N]: ").strip().lower()
+    if ans != "y" and ans != "yes":
+        print("  已退出。")
+        return False
+
+    # 创建确认标记 (仅一次)
+    try:
+        with open(flag_path, "w") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
+        print("  ✅ 已记录确认, 下次不再显示此提示")
+    except Exception:
+        pass
+    return True
+
+
+# ──────────────────────────────────────────
 # 日志配置
 # ──────────────────────────────────────────
 
@@ -158,6 +207,10 @@ def setup_logging(config: dict):
 def cmd_start(config: dict, mode: str = "FC"):
     """启动自动打歌。"""
     from auto_play import AutoPlayer
+
+    # 法律确认
+    if not _check_legal_acknowledgment():
+        return
 
     player = AutoPlayer(config, mode=mode)
 
@@ -208,6 +261,10 @@ def cmd_calibrate(config: dict, interactive: bool = False,
 def cmd_auto(config: dict, count: int = 0, infinite: bool = False,
              combo: str = "", team: str = "", mode: str = "FC"):
     """启动冲榜模式: 自动连续打歌。"""
+    # 法律确认
+    if not _check_legal_acknowledgment():
+        return
+
     # 先应用编队 (如需)
     if team:
         from team_builder import TeamBuilder
