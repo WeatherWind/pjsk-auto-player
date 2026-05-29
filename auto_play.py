@@ -1,5 +1,5 @@
 """
-自动打歌引擎 —— 核心循环: 截图 → 分析 → 触摸 (含预测引擎)。
+自动执行引擎 —— 核心循环: 截图 → 分析 → 触摸 (含预测引擎)。
 
 核心改进:
   1. 预测引擎: 提前检测判定线上方的 note, 计算滚动速度,
@@ -33,7 +33,7 @@ except ImportError:
 logger = logging.getLogger("pjsk_auto_play")
 
 
-# 打歌模式预设: 每个模式对应一组随机化参数
+# 执行模式预设: 每个模式对应一组随机化参数
 # 通过调整时机抖动、位置抖动和漏键率来模拟不同水平的人类玩家
 PERFORMANCE_MODES = {
     "AP": {
@@ -331,7 +331,7 @@ class NoteTracker:
 
 class AutoPlayer:
     """
-    自动打歌器。
+    自动执行器。
 
     工作流程:
         1. 截取手机屏幕
@@ -380,7 +380,7 @@ class AutoPlayer:
         self.miss_chance = rand_cfg.get("miss_chance", 0.001)
         self.hold_duration_jitter_ms = rand_cfg.get("hold_duration_jitter_ms", 30)
 
-        # ═══ 打歌模式 ═══
+        # ═══ 执行模式 ═══
         self._mode = mode.upper() if mode.upper() in MODE_NAMES else "FC"
         self._mode_index = MODE_NAMES.index(self._mode)
         self.set_mode(self._mode)
@@ -405,7 +405,7 @@ class AutoPlayer:
     # ──────────────────────────────────────────
 
     def start(self) -> None:
-        """启动自动打歌循环。"""
+        """启动自动执行循环。"""
         if not self._ensure_ready():
             return
 
@@ -429,7 +429,7 @@ class AutoPlayer:
         rand_status = "已启用" if self.rand_enabled else "已禁用"
         mode_label = self.mode_label
         logger.info("=" * 60)
-        logger.info("自动打歌已启动!")
+        logger.info("自动执行已启动!")
         logger.info(f"模式: {mode_label}  |  "
                      f"延迟补偿: {self.latency_comp}ms  |  "
                      f"预测引擎: {prediction_status}")
@@ -449,7 +449,7 @@ class AutoPlayer:
             self.stop()
 
     def stop(self) -> None:
-        """停止自动打歌, 释放所有触摸。"""
+        """停止自动执行, 释放所有触摸。"""
         self._running = False
         self._paused = False
         self._release_all()
@@ -474,7 +474,7 @@ class AutoPlayer:
         fps_avg = self._stats["frames"] / elapsed if elapsed > 0 else 0
 
         logger.info("─" * 40)
-        logger.info("自动打歌已停止")
+        logger.info("自动执行已停止")
         logger.info(f"运行时间: {elapsed:.1f}s")
         logger.info(f"处理帧数: {self._stats['frames']}  ({fps_avg:.1f} FPS)")
         logger.info(f"点击: {self._stats['taps']}  "
@@ -721,7 +721,7 @@ class AutoPlayer:
             logger.info(f"点击随机化: {status}")
             return True
         elif c == "m":
-            # 循环切换打歌模式
+            # 循环切换执行模式
             self.cycle_mode()
             return True
 
@@ -935,15 +935,15 @@ class AutoPlayer:
         return random.random() < self.miss_chance
 
     # ──────────────────────────────────────────
-    # 打歌模式切换 (AP / FC / LIVE)
+    # 执行模式切换 (AP / FC / LIVE)
     # ──────────────────────────────────────────
 
     def set_mode(self, mode: str) -> None:
-        """切换到指定打歌模式, 自动应用对应随机化参数。
+        """切换到指定执行模式, 自动应用对应随机化参数。
            同时同步到预测引擎 NoteTracker。"""
         mode = mode.upper()
         if mode not in PERFORMANCE_MODES:
-            logger.warning(f"未知打歌模式: {mode}, 使用 FC")
+            logger.warning(f"未知执行模式: {mode}, 使用 FC")
             mode = "FC"
 
         preset = PERFORMANCE_MODES[mode]
@@ -1011,7 +1011,7 @@ class Calibrator:
         """
         logger.info("=" * 50)
         logger.info("🎯 自动检测游戏速度")
-        logger.info(f"请在手机上进入 PJSK 打歌界面, 程序将录制 {duration_s:.0f} 秒")
+        logger.info(f"请在手机上进入 PJSK 执行界面, 程序将录制 {duration_s:.0f} 秒")
         logger.info("=" * 50)
 
         if not self.adb.wait_for_device(timeout=10):
@@ -1058,8 +1058,8 @@ class Calibrator:
         logger.info(f"录制完成: {frame_count} 帧, {len(velocities)} 个速度样本")
 
         if len(velocities) < 10:
-            logger.warning("速度样本不足, 请确保在打歌画面中运行")
-            return {"detected": False, "message": "速度样本不足, 请打开打歌界面后重试"}
+            logger.warning("速度样本不足, 请确保在执行画面中运行")
+            return {"detected": False, "message": "速度样本不足, 请打开执行界面后重试"}
 
         avg_v = sum(velocities) / len(velocities)
         velocities.sort()
@@ -1273,7 +1273,7 @@ class Calibrator:
             return
 
         print("交互式校准已启动。")
-        print("请在手机上打开 PJSK 打歌界面。")
+        print("请在手机上打开 PJSK 执行界面。")
         print("按键: q=退出  r=重新校准  +/- 调整判定线  </> 调整阈值")
 
         cv2.namedWindow("PJSK Calibrator", cv2.WINDOW_NORMAL)
@@ -1355,18 +1355,18 @@ class Calibrator:
 
 
 # ──────────────────────────────────────────
-# 冲榜模式 (Batch Play) —— 自动连续打歌
+# 连续执行 (Continuous Execution) —— 自动连续执行
 # ──────────────────────────────────────────
 
 class BatchPlayer:
     """
-    冲榜模式: 自动连续打歌, 处理结算画面、等待、重试。
+    连续执行: 自动连续执行, 处理结算画面、等待、重试。
 
     工作流程:
-      1. 启动 AutoPlayer, 等待用户进入打歌
+      1. 启动 AutoPlayer, 等待用户进入执行
       2. 等待歌曲结束 (game_over_timeout)
       3. 检测结算画面, 逐次点击返回选歌
-      4. 等待回到打歌画面
+      4. 等待回到执行画面
       5. 重复 2-4, 直到达到指定次数
     """
 
@@ -1387,7 +1387,7 @@ class BatchPlayer:
         self.song_timeout = bp.get("song_timeout", 360)
         self.max_failures = bp.get("max_failures_per_song", 20)
 
-        # 冲榜模式浮动权重: 每首歌随机选择打歌模式
+        # 连续执行浮动权重: 每首歌随机选择执行模式
         mode_weights = bp.get("mode_weights", {"AP": 25, "FC": 70, "LIVE": 5})
         self._mode_pool = []
         for m, w in mode_weights.items():
@@ -1432,7 +1432,7 @@ class BatchPlayer:
         }
 
     def start(self) -> None:
-        """启动冲榜模式。"""
+        """启动连续执行。"""
         # 先用 AutoPlayer 的 prepare 逻辑
         if not self.player._ensure_ready():
             return
@@ -1456,17 +1456,17 @@ class BatchPlayer:
         unique_modes = sorted(set(self._mode_pool))
         mode_range = "→".join(PERFORMANCE_MODES[m]["label"] for m in unique_modes)
         logger.info("=" * 60)
-        logger.info("🔥 PJSK 冲榜模式 已启动!")
+        logger.info("🔥 PJSK 连续执行 已启动!")
         logger.info(f"目标次数: {count_label}")
         logger.info(f"模式浮动: {mode_range}")
         logger.info(f"延迟补偿: {self.player.latency_comp}ms")
-        logger.info("请在手机上进入打歌画面, 程序将自动循环")
+        logger.info("请在手机上进入执行画面, 程序将自动循环")
         logger.info("按 Ctrl+C 停止")
         logger.info("=" * 60)
 
         try:
             if self._use_pipeline and self.pipeline:
-                logger.info("使用 Pipeline 引擎执行冲榜...")
+                logger.info("使用 Pipeline 引擎执行连续执行...")
                 self._run_with_pipeline()
             else:
                 self._auto_play_loop()
@@ -1477,7 +1477,7 @@ class BatchPlayer:
             self._cleanup()
 
     def _run_with_pipeline(self):
-        """使用 Pipeline 引擎执行冲榜。"""
+        """使用 Pipeline 引擎执行连续执行。"""
         if not self.pipeline:
             self._auto_play_loop()
             return
@@ -1488,7 +1488,7 @@ class BatchPlayer:
         def on_task(task, result, state):
             nonlocal song_count
             if task.name == "PlaySong" and result.matched:
-                # 执行打歌
+                # 执行执行
                 self._play_one_song()
                 song_count += 1
                 logger.info(f"✅ 第 {song_count} 首 完成  "
@@ -1496,31 +1496,31 @@ class BatchPlayer:
 
                 # 检查是否达到目标
                 if target > 0 and song_count >= target:
-                    logger.info(f"✅ 已完成 {target} 首, 冲榜结束!")
+                    logger.info(f"✅ 已完成 {target} 首, 连续执行结束!")
                     self.pipeline.stop()
 
         # 注册回调来拦截 PlaySong 任务
         self.pipeline.run("BatchStart", callback=on_task)
 
     def _auto_play_loop(self):
-        """冲榜主循环: 打歌 → 结算 → 下一首。"""
+        """连续执行主循环: 执行 → 结算 → 下一首。"""
         while self._running:
             # 检查是否达到目标次数
             if self.target_count > 0 and \
                self._batch_stats["songs_played"] >= self.target_count:
-                logger.info(f"✅ 已完成 {self.target_count} 首, 冲榜结束!")
+                logger.info(f"✅ 已完成 {self.target_count} 首, 连续执行结束!")
                 break
 
-            # ── 1. 等待进入打歌画面 ──
+            # ── 1. 等待进入执行画面 ──
             song_num = self._batch_stats["songs_played"] + 1
             logger.info(f"\n{'─' * 40}")
-            logger.info(f"🎵 第 {song_num} 首 — 等待打歌开始...")
+            logger.info(f"🎵 第 {song_num} 首 — 等待执行开始...")
 
             if not self._wait_for_game_start():
-                logger.info("等待打歌开始超时, 停止")
+                logger.info("等待执行开始超时, 停止")
                 break
 
-            # ── 2. 打歌 ──
+            # ── 2. 执行 ──
             logger.info(f"▶ 第 {song_num} 首 开始!")
             song_start = time.time()
             song_stats = self._play_one_song()
@@ -1565,10 +1565,10 @@ class BatchPlayer:
 
     def _wait_for_game_start(self, need_game: bool = True) -> bool:
         """
-        等待进入打歌画面。
+        等待进入执行画面。
 
         Returns:
-            True 如果检测到打歌开始, False 如果超时
+            True 如果检测到执行开始, False 如果超时
         """
         timeout = self.next_song_timeout
         start_time = time.time()
@@ -1585,7 +1585,7 @@ class BatchPlayer:
             screen_type = self.player.analyzer.classify_screen(frame)
 
             if need_game and screen_type == "game":
-                # 确认确实是打歌中: 连续检测到 2 次
+                # 确认确实是执行中: 连续检测到 2 次
                 time.sleep(0.1)
                 frame2 = self.player.adb.screencap()
                 if frame2 and self.player.analyzer.classify_screen(frame2) == "game":
@@ -1599,7 +1599,7 @@ class BatchPlayer:
         return False
 
     def _pick_and_apply_mode(self) -> None:
-        """从权重池中随机选择一个打歌模式, 应用到 player。
+        """从权重池中随机选择一个执行模式, 应用到 player。
            如果历史记录中有失败记录, 动态降级模式以提高稳定性。"""
         pool = list(self._mode_pool)
 
@@ -1646,14 +1646,14 @@ class BatchPlayer:
 
     def _play_one_song(self) -> Optional[dict]:
         """
-        打一首歌, 返回该次打歌的统计。
+        打一首歌, 返回该次执行的统计。
 
         内部使用 AutoPlayer 的循环逻辑, 但增加了:
           - 单曲超时保护
           - 结算画面检测后自动退出循环
           - 随机模式浮动 (FC/AP/LIVE)
         """
-        # 每首歌随机选择打歌模式 (浮动 AP/FC/LIVE)
+        # 每首歌随机选择执行模式 (浮动 AP/FC/LIVE)
         self._pick_and_apply_mode()
 
         # 重置追踪器和统计 (每首歌独立)
@@ -1706,16 +1706,16 @@ class BatchPlayer:
             # 画面分类
             if state.in_result:
                 # 歌曲结束, 结算画面出现
-                logger.info("检测到结算画面, 结束打歌")
+                logger.info("检测到结算画面, 结束执行")
                 self.player._running = False
                 break
 
             if not state.in_game and not state.in_menu:
-                # 既不是打歌也不是菜单 — 可能是加载或过渡
+                # 既不是执行也不是菜单 — 可能是加载或过渡
                 if self.player._last_game_active > 0:
                     idle = time.time() - self.player._last_game_active
                     if idle > self.player.game_over_timeout:
-                        logger.info("游戏结束超时, 结束打歌")
+                        logger.info("游戏结束超时, 结束执行")
                         self.player._running = False
                         break
                 self.player.tracker.reset()
@@ -1728,7 +1728,7 @@ class BatchPlayer:
                 time.sleep(0.05)
                 continue
 
-            # 打歌中
+            # 执行中
             self.player._last_game_active = time.time()
 
             # 预测 + 判定线 (共享逻辑)
@@ -1813,7 +1813,7 @@ class BatchPlayer:
             st = self.player.analyzer.classify_screen(frame)
 
             if st == "game":
-                logger.info("✅ 已返回打歌画面")
+                logger.info("✅ 已返回执行画面")
                 return
             if st == "menu":
                 logger.info("✅ 已返回选歌/菜单")
@@ -1823,12 +1823,12 @@ class BatchPlayer:
                        "尝试继续...")
 
     def _print_final_stats(self):
-        """打印冲榜最终统计。"""
+        """打印连续执行最终统计。"""
         elapsed = time.time() - self._batch_stats["start_time"]
         played = self._batch_stats["songs_played"]
 
         logger.info("=" * 50)
-        logger.info("🔥 冲榜统计")
+        logger.info("🔥 连续执行统计")
         logger.info("=" * 50)
         logger.info(f"  完成歌曲: {played} 首")
         logger.info(f"  失败歌曲: {self._batch_stats['songs_failed']} 首")
@@ -1865,7 +1865,7 @@ class BatchPlayer:
             pass
 
     def _write_stats(self):
-        """写入冲榜状态供 Web 仪表盘读取。"""
+        """写入连续执行状态供 Web 仪表盘读取。"""
         stats_file = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), ".batch_stats.json"
         )

@@ -658,7 +658,7 @@ input[type="range"]::-webkit-slider-thumb {
           </tr>
           <tr>
             <td style="text-align: center;"><input type="checkbox" id="chk-play" checked></td>
-            <td><div style="font-weight: 600;">▶ 打歌</div><div class="text-muted">自动冲榜</div></td>
+            <td><div style="font-weight: 600;">▶ 执行</div><div class="text-muted">自动连续执行</div></td>
             <td>
               <div class="flex-row">
                 <span class="text-muted">次数</span>
@@ -758,7 +758,7 @@ input[type="range"]::-webkit-slider-thumb {
             <select class="form-select" id="sel-team"></select>
           </div>
           <div class="form-group">
-            <label>打歌次数 (0 = 无限)</label>
+            <label>执行次数 (0 = 无限)</label>
             <input type="number" class="form-input" id="inp-count" value="10" min="0">
           </div>
         </div>
@@ -783,7 +783,7 @@ input[type="range"]::-webkit-slider-thumb {
     <!-- ════════════ 性能统计 ════════════ -->
     <div id="page-stats" class="page">
       <div class="card">
-        <div class="card-title">📊 冲榜总览</div>
+        <div class="card-title">📊 连续执行总览</div>
         <div class="stats-grid">
           <div class="stat-item"><div class="stat-value" id="st-total">-</div><div class="stat-label">总曲数</div></div>
           <div class="stat-item"><div class="stat-value" id="st-duration">-</div><div class="stat-label">总时长 (分钟)</div></div>
@@ -840,8 +840,8 @@ input[type="range"]::-webkit-slider-thumb {
         <h2 style="color: var(--accent); margin-bottom: 4px;">🎵 PJSK Auto Player</h2>
         <p class="text-muted" style="font-size: 14px;" id="about-version">v4.3.0</p>
         <p style="font-size: 13px; margin: 10px 0; line-height: 1.6;">
-          基于 ADB+OpenCV 的 Project Sekai 自动打歌工具<br>
-          预测引擎 · Pipeline 流水线 · 冲榜 · 反封号
+          基于 ADB+OpenCV 的 Project Sekai 自动执行工具<br>
+          预测引擎 · Pipeline 流水线 · 连续执行 · 反封号
         </p>
         <p style="font-size: 13px;">
           <a href="https://github.com/WeatherWind/pjsk-auto-player" target="_blank" style="color: var(--accent);">GitHub</a>
@@ -1351,7 +1351,7 @@ async function runTaskPipeline() {
       const mode = document.getElementById('task-mode').value || 'FC';
       const st = document.getElementById('st-play');
       st.className = 'badge badge-yellow'; st.textContent = '▶ 运行中';
-      appendLog({ message: `🚀 启动冲榜 (mode=${mode}, count=${count})`, level: 'info', ts: new Date().toLocaleTimeString() });
+      appendLog({ message: `🚀 启动连续执行 (mode=${mode}, count=${count})`, level: 'info', ts: new Date().toLocaleTimeString() });
       await sendCommand('start', { mode, count, combo });
     }
 
@@ -1381,21 +1381,21 @@ function quickGo() {
   if (combo) cmd.combo = combo;
   if (team) cmd.team = team;
   apiPost('/command', cmd).then(r => {
-    if (r.ok) toast('🚀 冲榜已启动', 'success');
+    if (r.ok) toast('🚀 连续执行已启动', 'success');
     else toast('❌ ' + (r.error || '启动失败'), 'error');
   }).catch(e => toast('❌ ' + e, 'error'));
 }
 
 async function autoSpeed() {
   const el = document.getElementById('speed-result');
-  el.textContent = '⏳ 检测中... 请确保在打歌界面 (约8秒)';
+  el.textContent = '⏳ 检测中... 请确保在执行界面 (约8秒)';
   try {
     const d = await apiGet('/auto-speed');
     if (d.detected) {
       el.innerHTML = '✅ 检测成功! 速度: ' + d.avg_velocity + ' px/s<br>已自动更新配置文件';
       setTimeout(loadConfig, 500);
     } else {
-      el.textContent = '❌ ' + (d.message || '检测失败, 请确保在打歌界面');
+      el.textContent = '❌ ' + (d.message || '检测失败, 请确保在执行界面');
     }
   } catch (e) {
     el.textContent = '❌ 检测失败: ' + e;

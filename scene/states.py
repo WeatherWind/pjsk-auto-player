@@ -10,7 +10,7 @@ class GameScene(str, Enum):
         LOADING < RESULT < MENU < GAME < UNKNOWN
     """
 
-    GAME = "game"           # 打歌中 — 判定线有 note 活动
+    GAME = "game"           # 执行中 — 判定线有 note 活动
     RESULT = "result"       # 结算画面 — 整体高亮, 无 note
     MENU = "menu"           # 主菜单 / 选歌 / 设置
     LOADING = "loading"     # 加载中 — 全黑 / 渐变 / 模糊
@@ -21,8 +21,8 @@ class SceneTask(str, Enum):
     """每个场景下对应的自动化任务名称。"""
 
     # --- GAME ---
-    PLAY_AUTO = "play_auto"           # 自动打歌
-    PLAY_MANUAL = "play_manual"       # 手动打歌 (仅监控)
+    PLAY_AUTO = "play_auto"           # 自动执行
+    PLAY_MANUAL = "play_manual"       # 手动执行 (仅监控)
 
     # --- RESULT ---
     READ_SCORE = "read_score"         # 读取结算分数

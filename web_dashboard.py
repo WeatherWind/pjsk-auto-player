@@ -2,7 +2,7 @@
 PJSK Auto Player — 应用主程序
 
 浏览器完全操控，无需命令行。
-自动初始化 scrcpy + minitouch，后台线程管理打歌。
+自动初始化 scrcpy + minitouch，后台线程管理执行。
 
 启动:
   python main.py
@@ -93,7 +93,7 @@ def _init_backends():
         _run_speedtest()
         log("✅ 后端就绪")
         # 桌面通知
-        _notify("设备已连接", "可以开始冲榜了！")
+        _notify("设备已连接", "可以开始连续执行了！")
     except Exception as e:
         log(f"❌ 初始化失败: {e}")
         _start_reconnect_thread()
@@ -113,7 +113,7 @@ def _start_reconnect_thread():
                     time.sleep(1)
                     if _adb and _adb.is_connected():
                         log("✅ USB 已重连")
-                        _notify("设备已重连", "冲榜继续！")
+                        _notify("设备已重连", "连续执行继续！")
                         break
                 else:
                     log("⏰ 重连超时, 继续等待...")
@@ -159,7 +159,7 @@ def _notify(title: str, message: str):
 
 
 def cmd_start(song_count=0, combo="", team="", mode="FC"):
-    """后台启动冲榜。"""
+    """后台启动连续执行。"""
     global _app_thread, _app_running, _app_paused
     if _app_running:
         log("⚠️ 已在运行")
@@ -180,7 +180,7 @@ def cmd_start(song_count=0, combo="", team="", mode="FC"):
     _app_paused = False
     _app_thread = threading.Thread(target=_run, daemon=True)
     _app_thread.start()
-    log("▶ 开始冲榜")
+    log("▶ 开始连续执行")
 
 
 def cmd_stop():
@@ -637,12 +637,12 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
   </td>
 </tr>
 
-<!-- 4. 打歌 -->
+<!-- 4. 执行 -->
 <tr>
   <td style="padding:16px"><input type="checkbox" id="chk-play" checked></td>
   <td style="padding:12px 8px">
-    <div style="font-weight:600;font-size:14px">▶ 打歌</div>
-    <div style="color:var(--td);font-size:11px">自动冲榜</div>
+    <div style="font-weight:600;font-size:14px">▶ 执行</div>
+    <div style="color:var(--td);font-size:11px">自动连续执行</div>
   </td>
   <td style="padding:12px 8px">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -691,10 +691,10 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 </div>
 
 <div id="p-scripts" class="pg">
-<div class="card"><div class="ct">启动冲榜</div>
+<div class="card"><div class="ct">启动连续执行</div>
 <div class="fr"><div class="fg"><label>歌单</label><select id="sel-combo"></select></div>
 <div class="fg"><label>编队</label><select id="sel-team"></select></div></div>
-<div class="fr"><div class="fg"><label>打歌模式</label><select id="sel-mode"><option value="FC">FC - Full Combo (默认)</option><option value="AP">AP - All Perfect</option><option value="LIVE">LIVE - 通关保底</option></select></div></div>
+<div class="fr"><div class="fg"><label>执行模式</label><select id="sel-mode"><option value="FC">FC - Full Combo (默认)</option><option value="AP">AP - All Perfect</option><option value="LIVE">LIVE - 通关保底</option></select></div></div>
 <div class="fr"><div class="fg"><label>次数 (0=无限)</label><input type="number" id="inp-count" value="10" min="0"></div>
 <div class="fg"><label>&nbsp;</label><button class="btn btn-p" onclick="quickGo()" style="width:100%">🚀 一键启动</button></div></div></div>
 <div class="card"><div class="ct">自动检测</div>
@@ -713,7 +713,7 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 </div>
 
 <div id="p-stats" class="pg">
-<div class="card"><div class="ct">冲榜总览</div>
+<div class="card"><div class="ct">连续执行总览</div>
 <div class="sg">
   <div class="st"><div class="sv" id="st-total">-</div><div class="sl">总曲数</div></div>
   <div class="st"><div class="sv" id="st-duration">-</div><div class="sl">总时间 (分钟)</div></div>
@@ -730,7 +730,7 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 <div class="card" style="text-align:center">
 <h2 style="color:var(--ac);margin-bottom:4px">🎵 PJSK Auto Player</h2>
 <p style="color:var(--td);font-size:14px" id="about-version">v4.3.0</p>
-<p style="color:var(--td);font-size:13px;margin:8px 0">基于 ADB+OpenCV 的 Project Sekai 自动打歌<br>原生桌面窗口 · 预测引擎 · Pipeline · 冲榜 · 反封号</p>
+<p style="color:var(--td);font-size:13px;margin:8px 0">基于 ADB+OpenCV 的 Project Sekai 自动执行<br>原生桌面窗口 · 预测引擎 · Pipeline · 连续执行 · 反封号</p>
 <p style="font-size:13px"><a href="https://github.com/WeatherWind/pjsk-auto-player" target="_blank" style="color:var(--ac)">GitHub</a></p>
 <div id="vt" style="margin-top:16px;text-align:left"></div></div>
 </div>
@@ -807,9 +807,9 @@ async function runTasks(){
     }
   }
   
-  // 4. 冲榜
+  // 4. 连续执行
   if(document.getElementById('chk-play').checked){
-    let combo=document.getElementById('task-combo').value||'grind-single';
+    let combo=document.getElementById('task-combo').value||'loop-single';
     let count=document.getElementById('task-infinite').checked?0:parseInt(document.getElementById('task-count').value)||10;
     document.getElementById('st-play').className='bdg bdg-y';document.getElementById('st-play').textContent='进行中';
     await fetch('/api/action?action=start&combo='+combo+'&count='+count);
@@ -831,7 +831,7 @@ async function loadCfg(){try{let d=await g('/api/config');document.getElementByI
 async function saveCfg(){await fetch('/api/config',{method:'POST',headers:{'Content-Type':'text/plain'},body:document.getElementById('cfg-editor').value});alert('✅ 已保存')}
 async function loadCombos(){try{
 let d=await g('/api/combos');let s=document.getElementById('task-combo');let s2=document.getElementById('sel-combo');let l=document.getElementById('combo-list');
-s.innerHTML='<option value="grind-single">单曲循环</option>';l.innerHTML='';
+s.innerHTML='<option value="loop-single">单曲循环</option>';l.innerHTML='';
 (d.combos||[]).forEach(c=>{s.innerHTML+=`<option value="${c.key}">${c.name} (${c.songs}首)</option>`;if(s2)s2.innerHTML+=`<option value="${c.key}">${c.name}</option>`;l.innerHTML+=`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><strong>${c.name}</strong> <span style="color:var(--td);font-size:12px">${c.songs}首</span>${c.description?'<div style="color:var(--td);font-size:12px">'+c.description+'</div>':''}</div>`})
 }catch(e){}}
 async function loadTeams(){try{
@@ -845,9 +845,9 @@ let d=await g('/api/versions');let h='<table style="width:100%;border-collapse:c
 }catch(e){}}
 function quickGo(){let c=document.getElementById('sel-combo').value;let t=document.getElementById('sel-team').value;let n=document.getElementById('inp-count').value||0;let m=document.getElementById('sel-mode').value||'FC';
 let p=['/api/action?action=start'];if(c)p.push('combo='+c);if(t)p.push('team='+t);if(n>0)p.push('count='+n);p.push('mode='+m);fetch(p.join('&'))
-let lb=document.getElementById('log-box');lb.innerHTML='<div class="ll">🚀 启动冲榜...</div>'}
+let lb=document.getElementById('log-box');lb.innerHTML='<div class="ll">🚀 启动连续执行...</div>'}
 function esc(s){let d=document.createElement('div');d.textContent=s;return d.innerHTML}
-async function autoSpeed(){let r=document.getElementById('speed-result');r.textContent='检测中...请确保在打歌界面 (约8秒)';try{let d=await g('/api/auto-speed');if(d.detected){r.innerHTML='✅ 速度: '+d.avg_velocity+' px/s<br>已自动更新 config.yaml (检测区域 + 预测窗口 + 延迟补偿)';setTimeout(()=>{loadCfg()},500)}else{r.textContent='❌ '+((d||{}).message||'检测失败, 请确保在打歌界面')}}catch(e){r.textContent='❌ 检测失败: '+e}}
+async function autoSpeed(){let r=document.getElementById('speed-result');r.textContent='检测中...请确保在执行界面 (约8秒)';try{let d=await g('/api/auto-speed');if(d.detected){r.innerHTML='✅ 速度: '+d.avg_velocity+' px/s<br>已自动更新 config.yaml (检测区域 + 预测窗口 + 延迟补偿)';setTimeout(()=>{loadCfg()},500)}else{r.textContent='❌ '+((d||{}).message||'检测失败, 请确保在执行界面')}}catch(e){r.textContent='❌ 检测失败: '+e}}
 
 // ── 傻瓜模式 ──
 async function foolMode(){
@@ -859,8 +859,8 @@ async function foolMode(){
   // 2. 校准
   await fetch('/api/action?action=calibrate');
   await new Promise(r=>setTimeout(r,5000));
-  // 3. 启动冲榜
-  let c=document.getElementById('sel-combo').value||'grind-single';
+  // 3. 启动连续执行
+  let c=document.getElementById('sel-combo').value||'loop-single';
   let t=document.getElementById('sel-team').value||'';
   let n=document.getElementById('inp-count').value||0;
   let p=['/api/action?action=start','combo='+c];if(t)p.push('team='+t);if(n>0)p.push('count='+n);
@@ -965,7 +965,7 @@ def run(host: str = "0.0.0.0", port: int = 8080, native: bool = True):
                                                   "max_contour_area": 500}})
     _cfg.setdefault("timing", {"latency_compensation_ms": 0})
     _cfg.setdefault("touch", {"tap_duration_ms": 30})
-    _cfg.setdefault("batch_play", {})
+    _cfg.setdefault("continuous", {})
     _cfg.setdefault("scrcpy", {"auto_init": True, "max_fps": 30, "scale": 0.5})
     _cfg.setdefault("minitouch", {"auto_init": True})
     _cfg.setdefault("display", {"show_stats": True, "stats_interval_frames": 15})

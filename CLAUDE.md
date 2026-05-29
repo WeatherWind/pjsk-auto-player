@@ -13,7 +13,7 @@ Currently at **v4.9.0-dev** — a major refactor absorbing design patterns from 
 ```bash
 python main.py                  # Web dashboard (default, http://localhost:8080)
 python main.py start            # Start auto-play (single song)
-python main.py auto             # Batch/infinite grinding mode
+python main.py auto             # Batch/infinite looping mode
 python main.py web              # Web dashboard only
 python main.py daemon           # Background daemon (Unix socket on ~/.pjskd.sock)
 python main.py setup            # Setup wizard
@@ -92,7 +92,7 @@ There is no test suite or linter configured at this stage. Dependencies: `pip in
 - `scene.py` — Multi-algorithm scene detection.
 
 **`web/`** — Web dashboard V2 (zero external dependencies):
-- `app.py` — `WebApp`: HTTP server on `http.server`. REST API endpoints (`/status`, `/screenshot`, `/log`, `/config`, `/stats`, `/history`, `/command`). `PjskApp`-independent fallback path that directly instantiates `lib.auto_play.BatchPlayer`.
+- `app.py` — `WebApp`: HTTP server on `http.server`. REST API endpoints (`/status`, `/screenshot`, `/log`, `/config`, `/stats`, `/history`, `/command`). `PjskApp`-independent fallback path that directly instantiates `lib.auto_play.ContinuousPlayer`.
 - `websocket.py` — SSE-based real-time push: `SSEHandler` (EventSource-compatible long-polling), `MessageBus` (pub-sub), helper functions (`push_status`, `push_frame`, `push_log`, `push_stats`).
 
 **`handlers/`** — Game interaction handlers (ALAS-inspired):

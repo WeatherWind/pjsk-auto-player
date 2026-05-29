@@ -1,10 +1,10 @@
 {
-  "doc": "PJSK 冲榜歌单 (Combo) 定义",
+  "doc": "PJSK 连续执行歌单 (Combo) 定义",
   "version": "1",
 
-  "grind-master": {
-    "name": "Master 冲榜",
-    "description": "MASTER 难度冲榜套餐",
+  "loop-master": {
+    "name": "Master 连续执行",
+    "description": "MASTER 难度连续执行套餐",
     "difficulty": "master",
     "songs": [
       {"id": "dftn", "name": "ドクター＝ファンクビート", "difficulty": "master", "level": 31},
@@ -12,9 +12,9 @@
     ]
   },
 
-  "grind-expert": {
-    "name": "Expert 冲榜",
-    "description": "EXPERT 难度冲榜套餐",
+  "loop-expert": {
+    "name": "Expert 连续执行",
+    "description": "EXPERT 难度连续执行套餐",
     "difficulty": "expert",
     "songs": [
       {"id": "envy", "name": "エンヴィーベイビー", "difficulty": "expert", "level": 26},
@@ -22,7 +22,7 @@
     ]
   },
 
-  "grind-single": {
+  "loop-single": {
     "name": "单曲循环",
     "description": "重复当前已选择的歌曲 (手动选歌后启动)",
     "difficulty": "any",

@@ -6,7 +6,7 @@ PJSK Auto Player — 桌面应用 (Desktop App)
   - 双击启动 → 自动打开浏览器控制面板
   - 首次运行自动进入设置向导
   - 系统托盘图标（可选）
-  - 一键打歌/冲榜/暂停/停止
+  - 一键执行/连续执行/暂停/停止
 
 零命令行依赖 — 适合不熟悉终端的用户。
 
@@ -14,7 +14,7 @@ PJSK Auto Player — 桌面应用 (Desktop App)
     python desktop_app.py              # 桌面模式 (默认)
     python desktop_app.py --tray       # 系统托盘模式
     python desktop_app.py --wizard     # 强制设置向导
-    python desktop_app.py --start      # 直接开始打歌
+    python desktop_app.py --start      # 直接开始执行
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ _tray_icon = None
 def setup_system_tray(port: int = DEFAULT_PORT):
     """设置系统托盘图标（需要 pystray 库）。
 
-    提供菜单操作：开始打歌、暂停、停止、打开面板、退出。
+    提供菜单操作：开始执行、暂停、停止、打开面板、退出。
     """
     global _tray_icon
 
@@ -175,14 +175,14 @@ def setup_system_tray(port: int = DEFAULT_PORT):
         return img
 
     def _on_start(icon, item):
-        print("\n  🎵 开始打歌...")
+        print("\n  🎵 开始执行...")
         try:
             _send_command("start", {"mode": "FC"})
         except Exception as e:
             print(f"  ❌ {e}")
 
     def _on_stop(icon, item):
-        print("\n  🛑 停止打歌")
+        print("\n  🛑 停止执行")
         try:
             _send_command("stop")
         except Exception as e:
@@ -197,7 +197,7 @@ def setup_system_tray(port: int = DEFAULT_PORT):
         os._exit(0)
 
     menu = pystray.Menu(
-        pystray.MenuItem("🎵 开始打歌", _on_start, default=True),
+        pystray.MenuItem("🎵 开始执行", _on_start, default=True),
         pystray.MenuItem("🛑 停止", _on_stop),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("🌐 打开控制面板", _on_open),
@@ -252,7 +252,7 @@ def print_banner():
   ╔══════════════════════════════════════════════╗
   ║                                              ║
   ║       🎵  PJSK Auto Player  v{version:<10}    ║
-  ║          Project Sekai 自动打歌助手            ║
+  ║          Project Sekai 自动执行助手            ║
   ║                                              ║
   ║   控制面板: {DASHBOARD_URL:<29}  ║
   ║   手机访问: http://<电脑IP>:{DEFAULT_PORT:<22} ║
@@ -269,7 +269,7 @@ def print_quick_guide():
   │      如果没有自动打开，请手动访问上方地址       │
   │                                              │
   │   ⌨️  终端快捷键:                              │
-  │      [S] 开始打歌    [P] 暂停                 │
+  │      [S] 开始执行    [P] 暂停                 │
   │      [Q] 退出        [W] 设置向导              │
   │      [O] 重新打开浏览器                        │
   │                                              │
@@ -294,7 +294,7 @@ def run_desktop(
     Args:
         port: Web 服务器端口
         use_tray: 是否使用系统托盘
-        auto_start: 是否自动开始打歌
+        auto_start: 是否自动开始执行
         force_wizard: 是否强制显示设置向导
         skip_browser: 是否跳过打开浏览器
     """
@@ -335,16 +335,16 @@ def run_desktop(
         time.sleep(0.5)  # 等待服务器完全就绪
         open_dashboard(port)
 
-    # 自动开始打歌
+    # 自动开始执行
     if auto_start and app_instance:
-        print("\n  🎵 自动开始打歌...")
+        print("\n  🎵 自动开始执行...")
         try:
             app_thread = threading.Thread(
                 target=app_instance.run, kwargs={"mode": "live"}, daemon=True
             )
             app_thread.start()
         except Exception as e:
-            print(f"  ❌ 自动打歌失败: {e}")
+            print(f"  ❌ 自动执行失败: {e}")
 
     # 系统托盘
     tray_thread = None
@@ -380,7 +380,7 @@ def run_desktop(
             if cmd in ("q", "quit", "exit"):
                 break
             elif cmd in ("s", "start"):
-                print("  🎵 开始打歌...")
+                print("  🎵 开始执行...")
                 _send_command("start")
             elif cmd in ("p", "pause"):
                 if app_instance:
@@ -423,14 +423,14 @@ def main():
   python desktop_app.py                桌面模式 (推荐)
   python desktop_app.py --tray         系统托盘模式
   python desktop_app.py --wizard       强制设置向导
-  python desktop_app.py --start        直接开始打歌
+  python desktop_app.py --start        直接开始执行
   python desktop_app.py --no-browser   不打开浏览器
         """,
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Web 服务器端口")
     parser.add_argument("--tray", action="store_true", help="启用系统托盘")
     parser.add_argument("--wizard", action="store_true", help="强制显示设置向导")
-    parser.add_argument("--start", action="store_true", help="自动开始打歌")
+    parser.add_argument("--start", action="store_true", help="自动开始执行")
     parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
 
     args = parser.parse_args()

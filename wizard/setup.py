@@ -6,7 +6,7 @@ PJSK Auto Player — 设置向导 V2
   1. 选择语言
   2. 连接手机 (ADB 自动检测)
   3. 屏幕校准 (自动检测分辨率 + 判定线位置)
-  4. 选择打歌模式 (AP/FC/LIVE/冲榜)
+  4. 选择执行模式 (AP/FC/LIVE/连续执行)
   5. 保存配置 → 完成
 
 用法:
@@ -45,8 +45,8 @@ LANGUAGES = {
 PLAY_MODES = {
     "1": {"key": "ap",  "label_zh": "AP (All Perfect)",       "label_en": "AP (All Perfect)"},
     "2": {"key": "fc",  "label_zh": "FC (Full Combo)",        "label_en": "FC (Full Combo)"},
-    "3": {"key": "live", "label_zh": "LIVE (自由打歌)",         "label_en": "LIVE (Free Play)"},
-    "4": {"key": "auto", "label_zh": "冲榜 (自动无限循环)",     "label_en": "Auto (Rank Push)"},
+    "3": {"key": "live", "label_zh": "LIVE (自由执行)",         "label_en": "LIVE (Free Play)"},
+    "4": {"key": "auto", "label_zh": "连续执行 (自动自动连续)",     "label_en": "Auto (Rank Push)"},
 }
 
 
@@ -192,7 +192,7 @@ class SetupWizard:
         # 步骤 3: 屏幕校准
         self._step_calibrate()
 
-        # 步骤 4: 选择打歌模式
+        # 步骤 4: 选择执行模式
         self._step_play_mode()
 
         # 步骤 5: 保存配置
@@ -542,25 +542,25 @@ class SetupWizard:
         )
         print()
 
-    # ── 步骤 4: 选择打歌模式 ─────────────────────────────────
+    # ── 步骤 4: 选择执行模式 ─────────────────────────────────
 
     def _step_play_mode(self):
-        """选择打歌模式: AP / FC / LIVE / 冲榜。"""
+        """选择执行模式: AP / FC / LIVE / 连续执行。"""
         if self.auto:
             self.play_mode = "live"
             step(
-                _t("打歌模式: LIVE", "Play mode: LIVE", "プレイモード: LIVE", self.lang),
+                _t("执行模式: LIVE", "Play mode: LIVE", "プレイモード: LIVE", self.lang),
                 "✓",
             )
             return
 
         step(
-            _t("选择打歌模式", "Select Play Mode", "プレイモードを選択", self.lang),
+            _t("选择执行模式", "Select Play Mode", "プレイモードを選択", self.lang),
             "→",
         )
 
         mode_key = prompt_choice(
-            _t("请选择默认打歌模式", "Select default play mode", "デフォルトのプレイモードを選択", self.lang),
+            _t("请选择默认执行模式", "Select default play mode", "デフォルトのプレイモードを選択", self.lang),
             options=PLAY_MODES,
             default="3",
             lang=self.lang,
@@ -574,11 +574,11 @@ class SetupWizard:
         mode_labels = {
             "ap": _t("AP (All Perfect)", "AP (All Perfect)", "AP (All Perfect)", self.lang),
             "fc": _t("FC (Full Combo)", "FC (Full Combo)", "FC (Full Combo)", self.lang),
-            "live": _t("LIVE (自由打歌)", "LIVE (Free Play)", "LIVE (フリープレイ)", self.lang),
-            "auto": _t("冲榜 (自动无限循环)", "Auto (Rank Push)", "自動 (ランクプッシュ)", self.lang),
+            "live": _t("LIVE (自由执行)", "LIVE (Free Play)", "LIVE (フリープレイ)", self.lang),
+            "auto": _t("连续执行 (自动自动连续)", "Auto (Rank Push)", "自動 (ランクプッシュ)", self.lang),
         }
         step(
-            _t(f"打歌模式: {mode_labels.get(mode_key, mode_key)}", f"Play mode: {mode_labels.get(mode_key, mode_key)}", f"プレイモード: {mode_labels.get(mode_key, mode_key)}", self.lang),
+            _t(f"执行模式: {mode_labels.get(mode_key, mode_key)}", f"Play mode: {mode_labels.get(mode_key, mode_key)}", f"プレイモード: {mode_labels.get(mode_key, mode_key)}", self.lang),
             "✓",
         )
         print()
@@ -654,7 +654,7 @@ class SetupWizard:
         print(f"  {C_GREEN}{'='*52}{C_RESET}")
         print()
 
-        mode_zh = {"ap": "AP", "fc": "FC", "live": "LIVE", "auto": "冲榜"}
+        mode_zh = {"ap": "AP", "fc": "FC", "live": "LIVE", "auto": "连续执行"}
         mode_en = {"ap": "AP", "fc": "FC", "live": "LIVE", "auto": "Auto"}
 
         print(f"    {_t('设备', 'Device', 'デバイス', self.lang)}:     {self.device_serial or '-'}")
@@ -665,13 +665,13 @@ class SetupWizard:
         print()
 
         print(f"    {C_CYAN}{_t('快速启动:', 'Quick Start:', 'クイックスタート:', self.lang)}{C_RESET}")
-        print(f"      pjsk start              {_t('开始打歌', 'Start playing', 'プレイ開始', self.lang)}")
+        print(f"      pjsk start              {_t('开始执行', 'Start playing', 'プレイ開始', self.lang)}")
         print(f"      pjsk start --mode ap     {_t('AP 模式', 'AP mode', 'AP モード', self.lang)}")
-        print(f"      pjsk auto               {_t('冲榜模式', 'Auto mode', '自動モード', self.lang)}")
+        print(f"      pjsk auto               {_t('连续执行', 'Auto mode', '自動モード', self.lang)}")
         print(f"      pjsk web                {_t('Web 控制面板', 'Web dashboard', 'Web ダッシュボード', self.lang)}")
         print()
 
-        print(f"  {C_DIM}{_t('💡 提示: 首次打歌前请确保手机已进入选歌界面', '💡 Tip: Ensure the phone is on the song selection screen before first play', '💡 ヒント: 最初のプレイ前にスマホが曲選択画面にあることを確認してください', self.lang)}{C_RESET}")
+        print(f"  {C_DIM}{_t('💡 提示: 首次执行前请确保手机已进入选歌界面', '💡 Tip: Ensure the phone is on the song selection screen before first play', '💡 ヒント: 最初のプレイ前にスマホが曲選択画面にあることを確認してください', self.lang)}{C_RESET}")
         print()
 
 

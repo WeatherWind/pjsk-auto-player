@@ -71,13 +71,13 @@ CONFIG_SCHEMA: dict[str, dict] = {
     "play": {
         "type": "object",
         "required": False,
-        "description": "打歌参数",
+        "description": "执行参数",
         "properties": {
             "mode": {
                 "type": "str",
                 "default": "live",
                 "choices": ["ap", "fc", "live", "auto"],
-                "description": "打歌模式",
+                "description": "执行模式",
             },
             "infinite": {"type": "bool", "default": False},
             "randomize_clicks": {"type": "bool", "default": True},

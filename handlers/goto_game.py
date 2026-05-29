@@ -6,7 +6,7 @@ PJSK Auto Player — 游戏启动/导航 Handler
   2. 等待加载完成
   3. 导航到主页
   4. 处理弹窗/公告
-  5. 进入打歌入口
+  5. 进入执行入口
 """
 
 from __future__ import annotations
@@ -75,8 +75,8 @@ class GotoHandler(BaseHandler):
         return False
 
     def navigate_to_live(self) -> bool:
-        """导航到打歌入口。"""
-        self.log("🎵 导航到打歌界面...")
+        """导航到执行入口。"""
+        self.log("🎵 导航到执行界面...")
         # 点击"开始演出"或"单人演出"
         timer = Timer(limit=15, count=30)
         timer.start()
@@ -93,7 +93,7 @@ class GotoHandler(BaseHandler):
                 self.log(f"✅ 点击: {button.name}")
                 return True
             time.sleep(0.3)
-        self.log("❌ 无法找到打歌入口", "error")
+        self.log("❌ 无法找到执行入口", "error")
         return False
 
     def handle_popups(self) -> int:

@@ -245,7 +245,7 @@ PJSK_BUTTONS = {
         color=(239, 210, 165),
     ),
     
-    # 打歌画面
+    # 执行画面
     "judgment_line": PjskButton(
         name="judgment_line",
         area=(0.05, 0.76, 0.95, 0.80),

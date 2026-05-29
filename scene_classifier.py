@@ -8,7 +8,7 @@
 
 检测策略 (按成本从低到高):
   a. 整体平均亮度 (1 次 mean)        → 结算/菜单/加载
-  b. 区域颜色直方图 (3 次 mean)      → 打歌/选歌
+  b. 区域颜色直方图 (3 次 mean)      → 执行/选歌
   c. 局部模板匹配 (30ms)             → 确认具体按钮
   d. OCR 阅读 (100ms+)               → 读取分数(reference only)
 """
@@ -30,7 +30,7 @@ class SceneType(str, Enum):
     LOADING = "loading"          # 加载中 (全黑/渐变)
     MENU = "menu"                # 主菜单/选歌
     RESULT = "result"            # 结算画面 (高亮)
-    GAME = "game"               # 打歌中
+    GAME = "game"               # 执行中
     TRANSITION = "transition"    # 过渡动画
 
 
@@ -113,7 +113,7 @@ class SceneClassifier:
                     self._last_scene = result
                     return result
 
-        # ── 步骤 3: 检测打歌画面 ──
+        # ── 步骤 3: 检测执行画面 ──
         # 判定线区域有亮色 note 活动
         j_roi = gray[
             max(0, self.judgment_y - 20):min(h, self.judgment_y + 20),
@@ -147,7 +147,7 @@ class SceneClassifier:
         return result
 
     def is_game(self, frame: np.ndarray) -> bool:
-        """快速判断是否在打歌中。"""
+        """快速判断是否在执行中。"""
         return self.classify(frame) == SceneType.GAME
 
     def is_result(self, frame: np.ndarray) -> bool:

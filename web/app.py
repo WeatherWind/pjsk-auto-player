@@ -462,14 +462,14 @@ class WebHandler(BaseHTTPRequestHandler):
                 try:
                     # Prefer new PjskApp architecture when available
                     if _app_instance is not None:
-                        push_log(f"🚀 启动打歌 (mode={mode}, PjskApp)", "info")
+                        push_log(f"🚀 启动执行 (mode={mode}, PjskApp)", "info")
                         _app_running = True
                         _app_paused = False
                         _app_instance.run(mode=mode.lower(), infinite=(count == 0))
                     else:
                         from auto_play import BatchPlayer
                         player = BatchPlayer(_cfg, song_count=count, mode=mode)
-                        push_log(f"🚀 启动冲榜 (mode={mode}, count={count})", "info")
+                        push_log(f"🚀 启动连续执行 (mode={mode}, count={count})", "info")
                         _app_running = True
                         _app_paused = False
                         player.start()

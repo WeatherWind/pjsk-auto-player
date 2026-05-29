@@ -1,0 +1,110 @@
+{
+  "app": {
+    "name": "PJSK Auto Player",
+    "description": "プロジェクトセカイ 自動化研究ツール",
+    "version": "v{version}"
+  },
+  "play": {
+    "start": "実行開始",
+    "stop": "停止",
+    "pause": "一時停止",
+    "resume": "再開",
+    "mode": {
+      "ap": "AP モード",
+      "fc": "FC モード",
+      "live": "LIVE モード",
+      "auto": "混合戦略"
+    }
+  },
+  "status": {
+    "idle": "待機中",
+    "running": "実行中",
+    "paused": "一時停止中",
+    "stopped": "停止中",
+    "error": "エラー"
+  },
+  "scene": {
+    "game": "演奏中",
+    "result": "リザルト画面",
+    "menu": "メインメニュー",
+    "loading": "ロード中",
+    "unknown": "不明な画面"
+  },
+  "error": {
+    "game_stuck": "ゲームが固まりました、再起動を試みます",
+    "game_bug": "ゲームの異常を検出、プロセスを終了します",
+    "page_unknown": "不明なページ、戻ります",
+    "connection_lost": "接続が切れました、再接続を待機中",
+    "too_many_click": "クリック回数が多すぎます、停止しました",
+    "task_timeout": "タスクがタイムアウトしました"
+  },
+  "controller": {
+    "adb": "ADB コントローラー",
+    "scrcpy": "scrcpy コントローラー",
+    "minitouch": "minitouch タッチ",
+    "combined": "スマートルーター"
+  },
+  "config": {
+    "loading": "設定を読み込み中...",
+    "saved": "設定を保存しました",
+    "hot_reload": "設定をホットリロードしました",
+    "validation_error": "設定の検証に失敗しました"
+  },
+  "pipeline": {
+    "task_start": "タスク開始: {name}",
+    "task_complete": "タスク完了: {name}",
+    "task_failed": "タスク失敗: {name}",
+    "task_retry": "再試行中 ({count}/{max})"
+  },
+  "gui": {
+    "title": "PJSK Auto Player ダッシュボード",
+    "dark_mode": "ダークモード",
+    "light_mode": "ライトモード",
+    "language": "言語",
+    "stats": {
+      "songs_played": "{count} 曲演奏済み",
+      "fps": "FPS",
+      "latency": "遅延 (ms)",
+      "accuracy": "命中率"
+    }
+  },
+  "wizard": {
+    "welcome": "PJSK Auto Player へようこそ",
+    "step1": "言語を選択",
+    "step2": "デバイスを接続",
+    "step3": "画面キャリブレーション",
+    "step4": "モードを選択",
+    "step5": "セットアップ完了",
+    "finish": "セットアップ完了！演奏を始めましょう 🎵"
+  },
+  "notification": {
+    "song_complete": "楽曲完了: {title}",
+    "error_occurred": "エラー発生: {msg}",
+    "batch_complete": "周回完了: {count} 曲"
+  },
+  "team": {
+    "builder": "編成アシスタント",
+    "event_bonus": "イベントボーナス: {bonus}%",
+    "total_power": "総合力: {power}"
+  },
+  "anti_detection": {
+    "enabled": "検知対策 有効",
+    "jitter_timing": "タイミング揺らぎ ±{ms}ms",
+    "jitter_position": "位置揺らぎ ±{px}px",
+    "miss_sim": "ランダムミス {pct}%"
+  },
+  "cli": {
+    "help": "使用法: python main.py [コマンド]",
+    "commands": {
+      "start": "実行開始",
+      "auto": "連続実行",
+      "web": "Web ダッシュボード",
+      "daemon": "バックグラウンドデーモン",
+      "setup": "セットアップウィザード",
+      "calibrate": "自動キャリブレーション",
+      "status": "状態確認",
+      "stop": "デーモン停止",
+      "config": "設定管理"
+    }
+  }
+}

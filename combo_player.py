@@ -6,13 +6,13 @@
   2. 对每首歌:
      a. (可选) 导航到歌曲选择界面
      b. 选择歌曲和难度
-     c. 等待打歌开始
-     d. 打歌
+     c. 等待执行开始
+     d. 执行
      e. 处理结算
   3. 切到下一首, 重复
 
 注意: 选歌导航需要模板图片或坐标配置,
-      首次使用建议用 `grind-single` (单曲循环) 模式。
+      首次使用建议用 `loop-single` (单曲循环) 模式。
 """
 
 import json
@@ -48,7 +48,7 @@ class ComboPlayer:
     歌单播放器: 按顺序播放歌单中的歌曲。
 
     模式:
-      - single (默认): 只打当前歌曲 (冲榜用)
+      - single (默认): 只打当前歌曲 (连续执行用)
       - auto: 自动选歌 + 切换 (需要模板/坐标配置)
     """
 
@@ -62,9 +62,9 @@ class ComboPlayer:
             self._load_combo(combo_name)
         else:
             # 默认用单曲循环
-            self._load_combo("grind-single")
+            self._load_combo("loop-single")
 
-        # 冲榜参数
+        # 连续执行参数
         bp = config.get("batch_play", {})
         self.target_count = song_count or bp.get("default_count", 0)
         self.result_wait = bp.get("result_wait_seconds", 4.0)
@@ -106,7 +106,7 @@ class ComboPlayer:
             else:
                 # 默认: 单曲循环
                 path = os.path.join(combo_dir, "default.json")
-                name = "grind-single"
+                name = "loop-single"
 
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -185,7 +185,7 @@ class ComboPlayer:
         logger.info("=" * 50)
         logger.info(f"🎵 歌单: {self.combo.name}")
         logger.info(f"曲目: {len(self.combo)} 首  |  目标: {count_label}")
-        logger.info(f"请在手机上进入打歌画面 (手动选好第一首歌)")
+        logger.info(f"请在手机上进入执行画面 (手动选好第一首歌)")
         logger.info("按 Ctrl+C 停止")
         logger.info("=" * 50)
 
@@ -209,7 +209,7 @@ class ComboPlayer:
 
             song_num = self._batch_stats["songs_played"] + 1
             logger.info(f"\n{'─' * 40}")
-            logger.info(f"🎵 第 {song_num} 首 — 等待打歌开始...")
+            logger.info(f"🎵 第 {song_num} 首 — 等待执行开始...")
 
             if not self._wait_for_game():
                 break
@@ -326,7 +326,7 @@ class ComboPlayer:
         return True
 
     def _wait_for_game(self) -> bool:
-        """等待进入打歌画面。"""
+        """等待进入执行画面。"""
         start = time.time()
         while time.time() - start < self.next_song_timeout:
             if not self._running:

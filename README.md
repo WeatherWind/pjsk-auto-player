@@ -1,7 +1,7 @@
-# PJSK Auto Player — 一站式 Project Sekai 游戏助手
+# PJSK Auto Player — CV 自动化研究工具
 
-> 基于 ADB + OpenCV 的 Project Sekai (プロジェクトセカイ) 自动打歌工具。
-> 吸收 MAA (MaaAssistantArknights) + ALAS (AzurLaneAutoScript) + MaaFramework 设计精华。
+> 基于 ADB + OpenCV 的计算机视觉与自动化控制研究项目。
+> 参考 MAA (MaaAssistantArknights) + ALAS (AzurLaneAutoScript) + MaaFramework 架构设计。
 
 ---
 
@@ -21,8 +21,8 @@
 
 ```bash
 python main.py              # 🖥️ 桌面模式 — 自动打开浏览器控制面板
-python main.py start        # 直接打歌
-python main.py auto         # 冲榜模式 (自动无限循环)
+python main.py start        # 单次执行
+python main.py auto         # 连续执行（自动处理结算与重试）
 python main.py setup        # 设置向导
 ```
 
@@ -32,21 +32,21 @@ python main.py setup        # 设置向导
 
 | 版本 | 特性 |
 |------|------|
+| **v5.1.0** | 🌍 i18n 国际化 (中/英/日) + 社区项目调研 + 模拟器连接指南 |
+| **v5.0.0** | 🖥️ MAA 风格原生桌面 GUI + 反检测 + 活动检测 |
 | **v4.11.0** | 🖥️ 开箱即用: 桌面应用 + 自动打开浏览器 + 首次运行向导 + 系统托盘 |
-| **v4.10.0** | 🧬 ALAS 深度集成: cached_property/Resource/cached_property/颜色预处理/Benchmark/配置 Schema |
-| **v4.9.1** | 🔧 Bugfix: API 接口统一、自动恢复策略实现、Web↔PjskApp 集成 |
+| **v4.10.0** | 🧬 ALAS 深度集成: cached_property/Resource/颜色预处理/Benchmark/配置 Schema |
 | **v4.9.0** | 🏗️ MAA/ALAS 融合架构: Pipeline V2 + 场景多算法投票 + Web 暗色面板 + 分级异常 + 守护进程 |
-| **v4.8.0** | 🎯 自适应延迟 PID 控制器: kp=0.3/ki=0.05/kd=0.1, 每首歌自动收敛 |
 
 ---
 
 ## 🔥 主要特性
 
 ### 🎯 预测引擎
-提前检测判定线上方的 note → 追踪滚动速度 → 计算到达时间 → 准时触发。
-补偿 ADB 的 100-300ms 延迟, 让纯反应式变主动式。
+基于时序预测的触发系统：检测判定区域上方目标 → 追踪移动速度 → 计算到达时间 → 准时触发。
+补偿 ADB 链路的 100-300ms 传输延迟，变被动响应为主动预测。
 
-### 🧠 Pipeline V2 引擎 (受 MAA 启发)
+### 🧠 Pipeline V2 引擎 (参考 MAA 设计)
 - **JSON 任务配置驱动** — 识别→动作→跳转的声明式流水线
 - **@任务继承** — `"ClickOK@ClickSelf"` 复用父任务配置，只覆盖差异
 - **节点生命周期** — `pre_wait_freezes → pre_delay → action → post_wait_freezes → post_delay`
@@ -76,17 +76,17 @@ python main.py setup        # 设置向导
                         └──────────────────────────────┘
 ```
 
-### 🎲 反检测点击随机化
-模拟人类操作：时机抖动 ±15ms、坐标偏移 ±5px、随机漏键 0.1%、长按时长抖动
+### 🎲 操作随机化
+模拟人工操作特征：时机抖动 ±15ms、坐标偏移 ±5px、随机漏键 0.1%、长按时长抖动
 
-### 🎮 打歌模式
-- **AP (All Perfect)** — 追求全完美
-- **FC (Full Combo)** — 全程连击
-- **LIVE** — 通关保底
-- **AUTO 浮动** — 冲榜时智能切换 (70% FC + 25% AP + 5% LIVE)
+### 🎮 执行策略
+- **AP** — 高精度触发策略
+- **FC** — 平衡稳定性策略
+- **LIVE** — 基础通过策略
+- **混合** — 智能切换策略 (70% FC + 25% AP + 5% LIVE)
 
 ### ⚡ PID 自适应延迟
-每首歌结束后基于实际触发提前量自动微调延迟补偿，逐步收敛到最佳值。
+每次执行结束后基于实际触发提前量自动微调延迟补偿，逐步收敛到最佳值。
 
 ### 📡 多后端控制器
 - **scrcpy 60 FPS** — 视频流方式高速截图
@@ -102,11 +102,11 @@ python main.py setup        # 设置向导
 - 日志查看器
 - 截图浏览器
 
-### 🛡️ 分级异常体系 (受 ALAS 启发)
+### 🛡️ 分级异常体系 (参考 ALAS 设计)
 | 异常 | 恢复策略 |
 |------|---------|
-| `GameStuckError` | 画面卡住 → 重启游戏 |
-| `GameBugError` | 游戏异常 → 杀进程重启 |
+| `GameStuckError` | 画面卡住 → 重启 |
+| `GameBugError` | 状态异常 → 杀进程重启 |
 | `GamePageUnknownError` | 未知页面 → 导航返回 |
 | `ConnectionLostError` | 连接断开 → 等待重连 |
 | `TooManyClickError` | 防死循环 → 停止任务 |
@@ -122,8 +122,56 @@ python main.py setup        # 设置向导
 
 ### 前置条件
 - Python 3.9+
-- Android 手机 (USB 调试开启)
+- Android 设备 (二选一):
+  - **真机**: USB 调试开启，USB 数据线连接
+  - **模拟器**: MuMu 模拟器 12 (推荐) 或雷电模拟器 9
 - ADB (自动检测或手动安装)
+
+### 连接方式
+
+#### 方式 A: 真机 (USB 直连)
+```bash
+# 1. 手机开启 USB 调试 (开发者选项中)
+# 2. USB 数据线连接电脑
+# 3. 验证连接
+adb devices
+# 应显示:  <serial>  device
+
+# 4. 运行设置向导
+python main.py setup
+```
+
+#### 方式 B: MuMu 模拟器 12 (推荐)
+```bash
+# 1. 下载安装 MuMu 模拟器 12: https://mumu.163.com/
+# 2. 在模拟器中安装 PJSK (通过 Google Play / QooApp / APK)
+# 3. 模拟器设置 → 其他设置:
+#    - 关闭 ROOT 权限
+#    - 分辨率: 1280x720 (推荐)
+#    - 开启 ADB 调试
+# 4. 连接模拟器 ADB
+adb connect 127.0.0.1:7555   # MuMu 12 默认端口
+
+# 5. 验证连接
+adb devices
+# 应显示:  127.0.0.1:7555  device
+
+# 6. 运行设置向导
+python main.py setup
+```
+
+#### 方式 C: 雷电模拟器 9
+```bash
+# 类似 MuMu，端口改为 5555
+adb connect 127.0.0.1:5555
+python main.py setup
+```
+
+> ⚠️ **模拟器注意事项**:
+> - 日服 (jp) 检测较严，建议使用 MuMu 12 Android 9 镜像
+> - 国际服 (en) 和台服 (tw) 检测相对宽松
+> - 模拟器内**不要开启 ROOT**，否则可能被游戏检测
+> - 如遇到游戏闪退，尝试在模拟器设置中关闭"开发者选项"
 
 ### 安装
 ```bash
@@ -140,7 +188,7 @@ python main.py setup
 # 2. 校准
 python main.py calibrate
 
-# 3. 开始打歌
+# 3. 开始执行
 python main.py start
 
 # 4. 或启动 Web 控制面板 (浏览器 http://localhost:8080)
@@ -214,8 +262,8 @@ pjsk-auto-player/
 | 命令 | 说明 |
 |------|------|
 | `python main.py` | Web 控制面板 (默认) |
-| `python main.py start` | 开始打歌 |
-| `python main.py auto` | 冲榜模式 |
+| `python main.py start` | 单次执行 |
+| `python main.py auto` | 连续执行 |
 | `python main.py web` | Web 控制面板 |
 | `python main.py daemon` | 后台守护进程 |
 | `python main.py calibrate` | 一键校准 |

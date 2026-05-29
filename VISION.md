@@ -6,9 +6,9 @@
 
 ## 🎯 总体目标
 
-从"自动打歌工具"升级为 **一站式 Project Sekai 游戏助手**：
-- **傻瓜化**：插上手机 → 运行 → 自动打歌，零配置
-- **全功能**：选歌/打歌/冲榜/活动熔于一炉
+从"自动执行工具"升级为 **一站式 Project Sekai 游戏助手**：
+- **傻瓜化**：插上手机 → 运行 → 自动执行，零配置
+- **全功能**：选歌/执行/连续执行/活动熔于一炉
 - **可视化**：现代 Web 控制面板，实时监控一切
 - **可靠**：分级异常处理 + 自动恢复，7x24 不崩溃
 
@@ -88,7 +88,7 @@ ALAS 启发式场景分类，改为多算法投票：
 ```
 截图 → 多算法并行检测（模板/颜色/亮度/OCR）
      → 加权投票 → 最佳场景 → 状态机转换
-     → 执行策略（打歌/结算/选歌/等待）
+     → 执行策略（执行/结算/选歌/等待）
 ```
 
 ### 5. 异常体系 (`exceptions.py`)
@@ -128,8 +128,8 @@ class TaskTimeoutError(PjskError): pass     # 任务超时
 1. 选择语言
 2. 连接手机 (ADB 自动检测)
 3. 屏幕校准（自动检测分辨率/判定线位置）
-4. 选择打歌模式 (AP/FC/LIVE/冲榜)
-5. 保存配置 → 开始打歌
+4. 选择执行模式 (AP/FC/LIVE/连续执行)
+5. 保存配置 → 开始执行
 
 ### 9. 通知系统 (`notification/`)
 - `notification/desktop.py` — macOS/Windows 桌面通知
@@ -139,7 +139,7 @@ class TaskTimeoutError(PjskError): pass     # 任务超时
 ### 10. CLI 守护进程
 - `hermes` 风格 CLI：`pjsk [command] [options]`
 - `pjsk daemon` — 后台守护进程
-- `pjsk start` — 开始打歌
+- `pjsk start` — 开始执行
 - `pjsk stop` — 停止
 - `pjsk status` — 查看状态
 - `pjsk config` — 配置管理
@@ -197,7 +197,7 @@ pjsk-auto-player/
 │   └── web.py              # 🆕 Web 推送
 ├── resource/
 │   ├── tasks/
-│   │   ├── battle.json     # 🆕 打歌流程
+│   │   ├── battle.json     # 🆕 执行流程
 │   │   ├── menu.json       # 🆕 菜单操作
 │   │   └── event.json      # 🆕 活动流程
 │   └── templates/          # 🆕 场景截图模板
@@ -220,6 +220,111 @@ pjsk-auto-player/
 
 ---
 
+## 📚 同类开源项目调研 (2026-05-29)
+
+> 调研 GitHub 上 Project Sekai / 音游自动化 / CV 游戏辅助相关的开源项目，
+> 学习社区中优秀的工程实践，取长补短。
+
+### 调研范围
+
+```
+                        音游自动执行能力 →
+                        ┌──────────────────────────────┐
+                   高   │                              │
+                        │     ★ PJSK Auto Player       │
+                        │    预测引擎 + Pipeline V2     │
+                        │    + PID + 反检测 + 多后端     │
+                        │                              │
+                    ↑   │                              │
+                  打    │                              │
+                  歌    │                              │
+                  能    │                              │
+                  力    │  ichikas    pjsk_auto_story  │
+                    ↓   │  (日常自动化) (剧情)          │
+                        │  KotoneBot  PjskAutoLive     │
+                   低   │  (CV框架)   (MacOS)          │
+                        └──────────────────────────────┘
+                         低 ← 工程化/易用性 → 高
+```
+
+### 项目详情
+
+#### 1. ichikas-auto-assistant (⭐36, GPLv3, Python)
+- **定位**: PJSK 日常任务全自动化 (登录/商店/任务/CM/区域对话/LIVE)
+- **框架**: 基于自研 KotoneBot (⭐4)
+- **GUI**: PySide6 + QML 原生桌面, DSL 自动生成配置表单
+- **识别**: KotoneBot 内置 OpenCV + RapidOCR, Prefab 模板图片代码生成
+- **控制器**: MuMu IPC / ADB / uiautomator / scrcpy 四通道
+- **任务系统**: 声明式 DSL (@action, @sleep, @ocr), Registry 注册表
+- **配置**: Pydantic 模型严格校验, 多 Profile
+- **执行方式**: 依赖游戏内置 AUTO 模式, RhythmGameAnalyzer 为亮度检测初级实现
+- **可学习**: 原生桌面 GUI (PySide6/QML), DSL 任务系统, Pydantic 配置校验, 模拟器 IPC 通信
+
+#### 2. pjsk_auto_story (⭐33, Apache 2.0, Python)
+- **定位**: 纯自动剧情阅读
+- **技术**: pyautogui 模板匹配 + pywin32 模拟点击
+- **规模**: <5 文件, 极简实现
+- **可学习**: 最小化实现思路, 专注单一问题
+
+#### 3. PjskAutoLive-MacOS (⭐1, Python)
+- **定位**: macOS 自动 LIVE (使用游戏内置 AUTO)
+- **技术**: pyautogui + tkinter GUI
+- **核心**: 固定间隔点击轨道, 工作/休息周期
+- **可学习**: macOS 平台适配经验, Tkinter 轻量 GUI
+
+#### 4. MaaFramework (⭐4.1k, AGPLv3, C++/Python)
+- **定位**: 通用 CV 自动化框架 (MAA 的泛化版本)
+- **生态**: MaaNTE (异环, ⭐1.6k), MFABD2 (棕色尘埃2, ⭐394) 等
+- **架构**: Controller-Resource-Agent 三层 + Pipeline JSON
+- **可学习**: i18n 国际化, CI/CD 自动构建, 任务热更新, 社区运营
+
+#### 5. KotoneBot (⭐4, GPLv3, Python)
+- **定位**: 轻量 CV 自动化框架 (ichikas 的底层引擎)
+- **特性**: 声明式 DSL, 平台无关 IO, Prefab 资源系统, 模拟器管理
+- **识别 API**: find()/ocr()/color()
+- **可学习**: DSL 语法设计, Prefab 图片代码生成, 模拟器管理
+
+### 能力矩阵 (取长补短参考)
+
+| 能力维度 | 本项目 | ichikas | pjsk_story | MaaFW | ALAS |
+|---------|--------|---------|------------|-------|------|
+| 真自动执行 | ✅ 预测引擎 | ❌ 仅 AUTO | ❌ | N/A | N/A |
+| Pipeline 任务引擎 | ✅ V2 @继承 | ⚠️ DSL | ❌ | ✅ JSON | ❌ |
+| 多算法场景检测 | ✅ 投票 | ⚠️ find() | ❌ | ✅ | ✅ |
+| 分级异常恢复 | ✅ 11种 | ⚠️ | ❌ | ❌ | ✅ |
+| 原生桌面 GUI | ⚠️ WebView | ✅ QML | ❌ | ⚠️ WPF | ✅ Qt |
+| Web 控制面板 | ✅ SSE | ❌ | ❌ | ❌ | ✅ Flask |
+| 声明式任务 DSL | ❌ | ✅ @action | ❌ | ❌ | ❌ |
+| 配置校验 | ⚠️ Schema | ✅ Pydantic | ❌ | ❌ | ✅ Schema |
+| i18n 国际化 | 🆕 刚刚加入 | ⚠️ JP/TW/CN | ❌ | ✅ | ❌ |
+| PWA 手机控制 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| CI/CD 自动构建 | ⚠️ 部分 | ✅ | ❌ | ✅ | ❌ |
+| 模拟器管理 | ❌ | ✅ MuMu | ❌ | ✅ | ✅ |
+| Prefab 资源系统 | ❌ | ✅ | ❌ | ❌ | ✅ Resource |
+| 单元测试 | ⚠️ 47/58 | ❌ | ❌ | ⚠️ | ✅ |
+
+### 可学习借鉴的方向
+
+**从 ichikas-auto-assistant + KotoneBot:**
+1. **PySide6/QML 原生桌面** — 启动更快、内存更低、更原生
+2. **DSL 声明式任务** — @action 装饰器简化任务编写
+3. **Pydantic 配置校验** — 启动时严格校验，失败自动回退
+4. **Prefab 资源系统** — 模板图片自动生成代码引用
+5. **MuMu 模拟器 IPC** — 比 ADB 更快的模拟器通信方式
+6. **任务注册表 (Registry)** — 新任务注册后 CLI/GUI 自动感知
+7. **多服务器适配** — 支持 JP/TW/CN/KR/EN 不同 UI
+
+**从 MAA/MaaFramework:**
+8. **JSON 任务热更新** — CDN 下发任务配置，无需发版
+9. **i18n 国际化** — 字符串资源统一管理，社区贡献翻译
+10. **CI/CD 自动构建** — tag push → GitHub Actions → Release
+
+**从 ALAS:**
+11. **Controller Benchmark** — 可视化比较各后端性能
+12. **模拟器管理** — 多开管理、自动启停、分辨率设置
+
+---
+
 ## 📋 实施路线
 
 | 阶段 | 内容 | 优先级 | 状态 |
@@ -234,13 +339,43 @@ pjsk-auto-player/
 | **Phase 8** | ALAS 工具库 (cached_property/Resource/颜色预处理/Benchmark/Schema) | P1 | ✅ v4.10.0 |
 | **Phase 9** | 开箱即用桌面体验 (双击启动/自动浏览器/系统托盘) | P0 | ✅ v4.11.0 |
 
-### v5.0 Roadmap (规划中)
+### v5.1 社区调研 → 后续迭代 (2026-05)
+
+#### 📊 取长补短方向
+
+| 项目 | Stars | 定位 | 值得学习的设计 | 本项目差异化 |
+|------|-------|------|----------------|-------------|
+| **ichikas-auto-assistant** | ⭐36 | PJSK 日常自动化 | PySide6/QML 原生桌面、DSL 配置表单、KotoneBot 框架、MuMu 模拟器集成 | 预测引擎 + 真自动执行 |
+| **pjsk_auto_story** | ⭐33 | PJSK 自动剧情 | 极简实现 (<5 文件)、专注单一问题 | 全功能流水线 |
+| **PjskAutoLive-MacOS** | ⭐1 | PJSK 自动 LIVE | macOS 适配经验、Tkinter 轻量 GUI | 智能控制器多后端 |
+| **MaaFramework** | ⭐4.1k | 通用自动化框架 | 多语言绑定、CI/CD、社区运营、Pipeline JSON | 已验证 MAA 式 Pipeline |
+| **KotoneBot** | ⭐4 | CV 自动化框架 | 声明式 DSL、Prefab 资源、模拟器管理 | 更强的异常恢复体系 |
+
+#### 🚀 v5.1 迭代计划
+
+| 特性 | 描述 | 优先级 | 启发来源 |
+|------|------|--------|---------|
+| 🧠 **AI 音符识别** | 轻量 ONNX 模型替代传统 CV，提高弱光/特效场景识别率 | P1 | 社区趋势 |
+| 📊 **执行回放分析** | 录屏 + 判定时间线可视化，分析每次判定时机 | P1 | 玩家需求 |
+| 🔄 **自动特殊任务** | 检测当前活动类型 → 自动选歌 → 循环连续执行 | P1 | ichikas 模式 |
+| 🌍 **i18n 国际化** 🆕 | 多语言支持 (中/英/日)，字符串统一管理 | P1 | MAA 实践 |
+| 🎨 **原生 Qt 桌面 GUI** | 从 WebView 升级到 PySide6/QML | P1 | ichikas 实践 |
+| 🗣️ **DSL 声明式任务** | @action/@sleep/@ocr 装饰器简化任务编写 | P2 | KotoneBot 实践 |
+| 📱 **PWA 手机控制** | Web 面板支持 PWA 安装 | P2 (✅ done) | 网页技术 |
+| 🧪 **单元测试增强** | pytest 覆盖核心模块 → 目标 80%+ | P1 | 社区标准 |
+| 🔐 **反检测增强** | 随机延迟曲线、贝塞尔滑动、触摸压力模拟 | P1 | ALAS 实践 |
+| 🏪 **模拟器管理** | MuMu IPC / LDPlayer 自动检测 + 一键启停 | P2 | ichikas/ALAS |
+| 📦 **CI/CD 自动构建** | tag push → GitHub Actions → 多平台 Release | P2 | MAA 实践 |
+| 🔧 **Pydantic 配置校验** | Schema 严格校验 + 启动时回退 | P2 | ichikas 实践 |
+| 📋 **任务注册表** | Registry 模式，CLI/GUI 自动发现任务 | P2 | KotoneBot 实践 |
+
+### v5.0 Roadmap (历史)
 
 | 特性 | 描述 | 优先级 |
 |------|------|--------|
 | 🧠 **AI 音符识别** | 用轻量 ONNX 模型替代传统 CV 检测，提高弱光/特效场景识别率 | P1 |
-| 📊 **打歌回放分析** | 录屏 + 判定时间线可视化，分析每次 PERFECT/GREAT/MISS 的时机 | P1 |
-| 🔄 **自动活动熔炉** | 检测当前活动类型 → 自动选对应歌曲 → 循环冲榜 | P1 |
+| 📊 **执行回放分析** | 录屏 + 判定时间线可视化，分析每次 PERFECT/GREAT/MISS 的时机 | P1 |
+| 🔄 **自动特殊任务** | 检测当前活动类型 → 自动选对应歌曲 → 循环连续执行 | P1 |
 | 🎨 **主题系统** | Web 面板支持浅色/深色/自定义主题 | P2 |
 | 🌍 **i18n 国际化** | Web 面板多语言支持 (中/英/日) | P2 |
 | 📱 **PWA 手机控制** | Web 面板支持 PWA 安装，手机浏览器直接控制 | P2 |
@@ -249,7 +384,26 @@ pjsk-auto-player/
 
 ---
 
-## ⚡ 与 MAA/ALAS 对标
+### 🔥 v5.1 快速迭代 (社区调研驱动)
+
+基于社区项目调研, 立即可推进:
+
+**P0 (本周)**:
+1. [ ] **i18n 国际化框架** — 抽取字符串到 `locale/zh_CN.json`，支持中/英/日
+2. [ ] **Pydantic 配置校验** — 替换现有 Schema 为 Pydantic models
+3. [ ] **CI/CD 完善** — `.github/workflows/release.yml` 三平台构建
+
+**P1 (下周)**:
+4. [ ] **原生 Qt 桌面 GUI** — 从 WebView 逐步迁移到 PySide6/QML
+5. [ ] **模拟器管理** — MuMu/LDPlayer 自动检测 + 一键启停
+6. [ ] **任务 DSL 原型** — 实现 @action 装饰器简化 Pipeline 任务编写
+
+**P2 (本月)**:
+7. [ ] **Prefab 资源系统** — 模板图片自动生成代码引用
+8. [ ] **Benchmark 面板** — 对比各后端性能，自动推荐最佳
+9. [ ] **多服 UI 适配** — 支持 JP/TW/CN/KR/EN 不同 UI
+
+### 架构参考 MAA/ALAS (历史)
 
 | 特性 | MAA | ALAS | PJSK v4.11 |
 |------|-----|------|-----------|

@@ -5,7 +5,7 @@ PJSK Auto Player — 原生桌面 GUI (Native GUI)
 像 MAA (MaaAssistantArknights) 一样的原生桌面应用体验：
   - 黑暗主题现代窗口
   - 设备连接状态 + 一键连接
-  - 打歌控制 (开始/暂停/停止)
+  - 执行控制 (开始/暂停/停止)
   - 实时日志输出 + 统计面板
   - 配置编辑 + 校准 + 设置向导
   - 零外部依赖 (仅 tkinter, Python 内置)
@@ -175,9 +175,9 @@ class PjskGui:
 
         # 控制
         ctrl_menu = tk.Menu(menubar, tearoff=0, bg=Theme.BG_PANEL, fg=Theme.FG_PRIMARY)
-        ctrl_menu.add_command(label="开始打歌 (FC)", command=lambda: self._start_play("fc"))
-        ctrl_menu.add_command(label="开始打歌 (AP)", command=lambda: self._start_play("ap"))
-        ctrl_menu.add_command(label="冲榜模式", command=lambda: self._start_play("auto"))
+        ctrl_menu.add_command(label="开始执行 (FC)", command=lambda: self._start_play("fc"))
+        ctrl_menu.add_command(label="开始执行 (AP)", command=lambda: self._start_play("ap"))
+        ctrl_menu.add_command(label="连续执行", command=lambda: self._start_play("auto"))
         ctrl_menu.add_separator()
         ctrl_menu.add_command(label="暂停", command=self._pause)
         ctrl_menu.add_command(label="停止", command=self._stop)
@@ -258,9 +258,9 @@ class PjskGui:
         ).pack(fill=tk.X, pady=(4, 0))
 
     def _build_control_panel(self, parent):
-        """打歌控制面板。"""
+        """执行控制面板。"""
         frame = tk.LabelFrame(
-            parent, text=" 🎵 打歌控制 ", font=Theme.FONT_TITLE,
+            parent, text=" 🎵 执行控制 ", font=Theme.FONT_TITLE,
             bg=Theme.BG_PANEL, fg=Theme.FG_PRIMARY,
             relief=tk.FLAT, bd=0, padx=12, pady=8,
         )
@@ -288,7 +288,7 @@ class PjskGui:
         btn_frame.pack(fill=tk.X, pady=4)
 
         self.start_btn = tk.Button(
-            btn_frame, text="▶  开始打歌", command=self._start_play_gui,
+            btn_frame, text="▶  开始执行", command=self._start_play_gui,
             bg=Theme.SUCCESS, fg="white", font=("SF Pro Display" if Theme._IS_MAC else "Segoe UI", 12, "bold"),
             relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
             activebackground=Theme.SUCCESS, activeforeground="white",
@@ -448,23 +448,23 @@ class PjskGui:
         self._start_play(mode)
 
     def _start_play(self, mode: str):
-        """开始打歌。"""
+        """开始执行。"""
         if not self._app_instance:
             self.log_queue.put("error", "❌ 后端未初始化")
             return
 
-        self.log_queue.put("success", f"🎵 开始打歌 (模式: {mode.upper()})")
+        self.log_queue.put("success", f"🎵 开始执行 (模式: {mode.upper()})")
         self._running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         self.pause_btn.config(state=tk.NORMAL)
-        self.status_var.set(f"🎵 打歌中 ({mode.upper()})")
+        self.status_var.set(f"🎵 执行中 ({mode.upper()})")
 
         def _run():
             try:
                 self._app_instance.run(mode=mode)
             except Exception as e:
-                self.log_queue.put("error", f"❌ 打歌异常: {e}")
+                self.log_queue.put("error", f"❌ 执行异常: {e}")
             finally:
                 self._running = False
                 self.root.after(0, self._on_play_stopped)
@@ -472,7 +472,7 @@ class PjskGui:
         threading.Thread(target=_run, daemon=True).start()
 
     def _on_play_stopped(self):
-        """打歌停止后的 UI 更新。"""
+        """执行停止后的 UI 更新。"""
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
         self.pause_btn.config(state=tk.DISABLED)
@@ -595,7 +595,7 @@ class PjskGui:
     def _on_close(self):
         """关闭窗口。"""
         if self._running:
-            if not messagebox.askyesno("确认退出", "打歌正在进行中，确定退出吗？"):
+            if not messagebox.askyesno("确认退出", "执行正在进行中，确定退出吗？"):
                 return
         if self._app_instance:
             self._app_instance.stop()

@@ -1,7 +1,7 @@
 """
 PJSK Auto Player — 自动活动检测 Handler (v5.0.0)
 
-检测 Project Sekai 当前活动类型，自动选择最佳冲榜策略:
+检测 Project Sekai 当前活动类型，自动选择最佳连续执行策略:
   - 马拉松活动 (Marathon): 单曲反复刷
   - 芝士活动 (Cheerful Carnival): 5v5 团队战
   - 一般活动 (Normal): 任意曲目
@@ -43,7 +43,7 @@ class EventInfo:
     event_type: EventType = EventType.UNKNOWN
     event_name: str = ""
     confidence: float = 0.0
-    recommended_songs: list[str] = None  # 推荐冲榜歌曲
+    recommended_songs: list[str] = None  # 推荐连续执行歌曲
 
     def __post_init__(self):
         if self.recommended_songs is None:
@@ -53,7 +53,7 @@ class EventInfo:
 class EventDetector:
     """活动检测器。
 
-    通过分析游戏画面识别当前活动类型，提供冲榜建议。
+    通过分析游戏画面识别当前活动类型，提供连续执行建议。
 
     检测流程:
       1. 截图 → 分析 Banner 区域颜色特征
@@ -171,7 +171,7 @@ class EventDetector:
             return EventInfo(event_type=EventType.UNKNOWN)
 
     def _get_recommended_songs(self, event_type: EventType) -> list[str]:
-        """根据活动类型推荐冲榜策略。"""
+        """根据活动类型推荐连续执行策略。"""
         if event_type == EventType.MARATHON:
             return ["任意高难度曲目", "推荐: 短时曲目 (效率优先)"]
         elif event_type == EventType.CHEERFUL:

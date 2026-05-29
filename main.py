@@ -2,7 +2,7 @@
 """
 PJSK Auto Player — 一站式 Project Sekai 游戏助手 (v4.11.0+)
 
-基于 ADB/OpenCV/scrcpy 的自动打歌工具。
+基于 ADB/OpenCV/scrcpy 的自动执行工具。
 吸收 MAA (MaaAssistantArknights) + ALAS (AzurLaneAutoScript) + MaaFramework 精华。
 
 开箱即用：
@@ -10,8 +10,8 @@ PJSK Auto Player — 一站式 Project Sekai 游戏助手 (v4.11.0+)
     python main.py desktop                  # 同上
 
 进阶用法:
-    python main.py start                    # 开始打歌
-    python main.py auto                     # 冲榜模式
+    python main.py start                    # 开始执行
+    python main.py auto                     # 连续执行
     python main.py daemon                   # 后台守护进程
     python main.py calibrate                # 校准
     python main.py setup                    # 设置向导

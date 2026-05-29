@@ -357,13 +357,13 @@ class SetupWizard:
         print(f"  {C_GREEN}{'='*50}{C_RESET}")
         print()
         print(f"    启动:  python main.py start")
-        print(f"    冲榜:  python main.py auto")
+        print(f"    连续执行:  python main.py auto")
         print(f"    校准:  python main.py calibrate")
         print(f"    仪表盘: python main.py web")
         print()
 
         # 提示
-        print(f"  {C_DIM}💡 提示: 首次打歌前请确保手机已进入选歌界面{C_RESET}")
+        print(f"  {C_DIM}💡 提示: 首次执行前请确保手机已进入选歌界面{C_RESET}")
         print()
 
 

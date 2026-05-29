@@ -1,5 +1,5 @@
 {
-  "doc": "PJSK Auto Player - 冲榜模式流水线 (v3.0.0 Pipeline)",
+  "doc": "PJSK Auto Player - 连续执行流水线 (v3.0.0 Pipeline)",
   "version": "3.0.0",
 
   "============================================================": "基础任务",
@@ -22,7 +22,7 @@
     "action": "DoNothing",
     "algorithm": "BrightnessDetect",
     "roi": [],
-    "doc": "检测是否在打歌画面: 判定线区域有亮像素",
+    "doc": "检测是否在执行画面: 判定线区域有亮像素",
     "next": ["PlaySong", "DetectResultScreen"],
     "failed_next": ["DetectResultScreen", "DetectMenuScreen"],
     "maxRetries": 3,
@@ -93,12 +93,12 @@
     "maxRetries": 30
   },
 
-  "============================================================": "打歌",
+  "============================================================": "执行",
 
   "PlaySong": {
     "action": "Tap",
     "algorithm": "BrightnessDetect",
-    "doc": "打歌: 进入 AutoPlayer 主循环, 检测 note 并触摸",
+    "doc": "执行: 进入 AutoPlayer 主循环, 检测 note 并触摸",
     "next": ["DetectResultScreen", "DetectGameScreen"],
     "failed_next": ["DetectResultScreen"],
     "maxRetries": 3,
@@ -129,11 +129,11 @@
     "postDelay": 500
   },
 
-  "============================================================": "冲榜循环",
+  "============================================================": "连续执行循环",
 
   "BatchStart": {
     "action": "DoNothing",
-    "doc": "冲榜起始点",
+    "doc": "连续执行起始点",
     "next": ["WaitForNextSong"],
     "sub": ["ClosePopup", "DismissRankUp"],
     "preDelay": 0,
@@ -142,7 +142,7 @@
 
   "BatchLoop": {
     "action": "DoNothing",
-    "doc": "冲榜循环体",
+    "doc": "连续执行循环体",
     "next": ["DetectGameScreen"],
     "sub": ["ClosePopup", "DismissRankUp"],
     "maxRetries": 9999

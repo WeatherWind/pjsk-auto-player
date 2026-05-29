@@ -7,7 +7,7 @@
   3. 自适应帧率 — 根据画面内容动态调整截图频率
 
 应用场景:
-  - 打歌中: 只需截取判定线附近区域 (~15% 画面)
+  - 执行中: 只需截取判定线附近区域 (~15% 画面)
   - 结算画面: 只需截取分数区域 (~20% 画面)
   - 加载/菜单: 慢速轮询 (2-5 FPS 即可)
 """
@@ -50,7 +50,7 @@ class CaptureOptimizer:
 
         # 各场景的推荐帧率
         self._scene_fps = {
-            SceneType.GAME: 30,          # 打歌: 30 FPS
+            SceneType.GAME: 30,          # 执行: 30 FPS
             SceneType.RESULT: 5,         # 结算: 5 FPS
             SceneType.MENU: 3,           # 菜单: 3 FPS
             SceneType.LOADING: 1,        # 加载: 1 FPS
@@ -60,7 +60,7 @@ class CaptureOptimizer:
 
         # 各场景的最小像素变化率 (低于此值跳过分析)
         self._scene_diff_threshold = {
-            SceneType.GAME: 0.005,      # 0.5% — 打歌时每帧都有 note 移动
+            SceneType.GAME: 0.005,      # 0.5% — 执行时每帧都有 note 移动
             SceneType.RESULT: 0.02,     # 2% — 结算动画变化较快
             SceneType.MENU: 0.01,       # 1% — 菜单变化幅度中等
             SceneType.LOADING: 0.05,    # 5% — 加载时大幅变化才触发
@@ -74,7 +74,7 @@ class CaptureOptimizer:
         返回全屏时 = (0, 0, screen_w, screen_h)
         """
         if scene == SceneType.GAME:
-            # 打歌: 判定线附近 + 预测区域
+            # 执行: 判定线附近 + 预测区域
             top = max(0, self.judgment_y - int(self.screen_h * 0.4))
             bottom = min(self.screen_h, self.judgment_y + 40)
             return (0, top, self.screen_w, bottom - top)

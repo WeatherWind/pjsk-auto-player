@@ -2,8 +2,8 @@
   "doc": "PJSK Auto Player — 编队配置",
   "version": "1",
 
-  "event-grind": {
-    "name": "活动冲榜队",
+  "event-loop": {
+    "name": "活动连续执行队",
     "description": "自动推荐最高加成编队",
     "auto_recommend": true,
     "method": "auto",

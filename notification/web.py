@@ -9,13 +9,13 @@ PJSK Auto Player — Web 推送通知
     # 作为独立通知器
     from notification.web import WebNotifier
     wn = WebNotifier(ws_server="ws://localhost:8080")
-    wn.notify(title="PJSK", message="打歌完成！")
+    wn.notify(title="PJSK", message="执行完成！")
 
     # 集成到 WebSocket 服务器
     from notification.web import WebNotifier
     wn = WebNotifier()
     wn.register_websocket(websocket)
-    wn.broadcast("打歌完成！", "PJSK")
+    wn.broadcast("执行完成！", "PJSK")
 """
 
 import json
@@ -350,7 +350,7 @@ def notify_web(
 
     用法:
         from notification.web import notify_web
-        notify_web("PJSK", "打歌完成！", level="success")
+        notify_web("PJSK", "执行完成！", level="success")
     """
     notifier = get_web_notifier()
     return notifier.notify(title, message, level=level, **kwargs)
@@ -371,7 +371,7 @@ if __name__ == "__main__":
     # 生成浏览器 toast 脚本
     script = WebNotifier.generate_browser_toast_script(
         "PJSK Auto Player",
-        "打歌完成！点击查看详情",
+        "执行完成！点击查看详情",
         icon="/static/icon.png",
         click_url="http://localhost:8080/",
     )

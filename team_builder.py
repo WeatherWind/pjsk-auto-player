@@ -1,5 +1,5 @@
 """
-自动编队系统 —— 活动冲榜队伍配置、角色选择、自动推荐。
+自动编队系统 —— 活动连续执行队伍配置、角色选择、自动推荐。
 
 功能:
   - 加载编队 JSON 模板
@@ -74,7 +74,7 @@ class TeamBuilder:
                     break
             else:
                 path = os.path.join(teams_dir, "default.json")
-                name = "event-grind"
+                name = "event-loop"
 
         try:
             with open(path, "r", encoding="utf-8") as f:

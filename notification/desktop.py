@@ -28,7 +28,7 @@ class DesktopNotifier:
         notifier = DesktopNotifier()
         notifier.notify(
             title="PJSK Auto Player",
-            message="打歌完成！",
+            message="执行完成！",
             icon="path/to/icon.png",
         )
     """
@@ -245,7 +245,7 @@ def notify(
 
     用法:
         from notification.desktop import notify
-        notify("PJSK", "打歌完成！")
+        notify("PJSK", "执行完成！")
     """
     notifier = DesktopNotifier()
     return notifier.notify(title, message, icon=icon, sound=sound)

@@ -31,8 +31,8 @@ class SceneTransitions:
             GameScene.UNKNOWN: 0.2,
         },
         GameScene.GAME: {
-            GameScene.RESULT: 1.0,     # 打歌结束 → 结算
-            GameScene.GAME: 0.9,       # 继续打歌
+            GameScene.RESULT: 1.0,     # 执行结束 → 结算
+            GameScene.GAME: 0.9,       # 继续执行
             GameScene.UNKNOWN: 0.2,
         },
         GameScene.RESULT: {

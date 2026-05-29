@@ -2,8 +2,8 @@
 PJSK Auto Player — CLI 入口
 
 使用示例:
-    pjsk start              # 开始打歌 (默认模式)
-    pjsk auto               # 冲榜模式
+    pjsk start              # 开始执行 (默认模式)
+    pjsk auto               # 连续执行
     pjsk calibrate          # 一键校准
     pjsk daemon             # 后台守护进程
     pjsk web                # 启动 Web 控制面板
@@ -35,21 +35,21 @@ def setup_logging(level: str = "INFO"):
 
 
 def cmd_start(args):
-    """启动自动打歌。"""
+    """启动自动执行。"""
     from app import PjskApp
     app = PjskApp(profile=args.profile)
     app.initialize()
     mode = args.mode or app.config.get("play", {}).get("mode", "live")
-    print(f"🎵 开始打歌 | 模式: {mode}")
+    print(f"🎵 开始执行 | 模式: {mode}")
     app.run(mode=mode)
 
 
 def cmd_auto(args):
-    """冲榜模式。"""
+    """连续执行。"""
     from app import PjskApp
     app = PjskApp(profile=args.profile)
     app.initialize()
-    print("♾️  冲榜模式 — 自动无限循环")
+    print("♾️  连续执行 — 自动自动连续")
     app.run(mode="auto", infinite=True)
 
 
@@ -169,8 +169,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  pjsk start             启动自动打歌
-  pjsk auto              冲榜模式
+  pjsk start             启动自动执行
+  pjsk auto              连续执行
   pjsk daemon            后台守护进程
   pjsk web               启动 Web 控制面板
   pjsk setup             设置向导
@@ -188,12 +188,12 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="子命令")
 
     # start
-    p_start = subparsers.add_parser("start", help="开始打歌")
-    p_start.add_argument("--mode", "-m", choices=["ap", "fc", "live", "auto"], help="打歌模式")
+    p_start = subparsers.add_parser("start", help="开始执行")
+    p_start.add_argument("--mode", "-m", choices=["ap", "fc", "live", "auto"], help="执行模式")
     p_start.set_defaults(func=cmd_start)
 
-    # auto (冲榜)
-    subparsers.add_parser("auto", help="冲榜模式").set_defaults(func=cmd_auto)
+    # auto (连续执行)
+    subparsers.add_parser("auto", help="连续执行").set_defaults(func=cmd_auto)
 
     # calibrate
     subparsers.add_parser("calibrate", help="一键校准").set_defaults(func=cmd_calibrate)

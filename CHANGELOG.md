@@ -44,10 +44,10 @@
 
 - **MAA 风格暗色窗口**: tkinter 原生 GUI，零外部依赖，跨平台 (Win/Mac/Linux)
 - **设备连接面板**: 状态指示灯 + 一键连接 + 分辨率/后端信息显示
-- **打歌控制面板**: 模式选择 (FC/AP/LIVE/AUTO) + 开始/暂停/停止按钮
+- **执行控制面板**: 模式选择 (FC/AP/LIVE/AUTO) + 开始/暂停/停止按钮
 - **实时统计面板**: 运行时间、歌曲数、点击数、FPS、错误数
 - **日志面板**: 彩色日志输出 (ERROR 红色/WARNING 橙色/SUCCESS 绿色)，自动滚动，500 行上限
-- **菜单栏**: 文件 (向导/配置/校准) + 控制 (打歌模式) + 视图 (浏览器/清空日志)
+- **菜单栏**: 文件 (向导/配置/校准) + 控制 (执行模式) + 视图 (浏览器/清空日志)
 - **线程安全**: 日志队列 (queue.Queue) + 定时刷新 (200ms)，后台操作不阻塞 UI
 - **`main.py` 默认启动**: 无参数 → 原生 GUI；`python main.py desktop` → Web 桌面；`python main.py gui` → 原生 GUI
 
@@ -94,7 +94,7 @@
 
 - 标记 Phase 1-9 全部完成
 - 新对标表: PJSK v4.11 vs MAA vs ALAS — 全面对标并超越
-- v5.0 规划: AI 音符识别 / 回放分析 / 自动活动熔炉 / 主题系统 / i18n
+- v5.0 规划: AI 音符识别 / 回放分析 / 自动特殊任务 / 主题系统 / i18n
 
 #### README 更新
 
@@ -190,7 +190,7 @@
 - **平滑限幅**: 单次调整上限 ±20ms, 防积分饱和 ±100ms
 - **可配置目标**: `target_advance_ms: 15` — 越小越激进 (精准) 但可能 MISS
 - **日志输出**: 每次调整记录 `PID 自适应延迟: 调整 +3.2ms → 总补偿 48ms`
-- **自动收敛**: 连续冲榜时补偿值自动收敛到最佳值, 无需手动微调
+- **自动收敛**: 连续连续执行时补偿值自动收敛到最佳值, 无需手动微调
 
 ## [4.7.0] - 2026-05-29
 
@@ -251,21 +251,21 @@
 - **Bug 修复**:
   - 修复所有硬编码版本号 (HTML 侧栏/关于页/API → 动态从 VERSION 文件加载)
   - 修复 Web 仪表盘缺失 `/api/action?action=team` 端点
-  - 修复批量打歌模式下热键不生效
+  - 修复批量执行模式下热键不生效
   - 修复 AutoPlayer ↔ NoteTracker 随机化状态不同步
   - 修复 FPS 在仪表盘显示过期值的问题
 - **GUI 增强**: 截图页面自动刷新开关、动态版本号同步、新统计页面
 
 ## [4.3.0] - 2026-05-29
 
-- **打歌模式系统**: AP (All Perfect) / FC (Full Combo) / LIVE (通关保底) 三种预设
-- **冲榜模式浮动**: 每首歌自动随机切换模式 (默认 70% FC + 25% AP + 5% LIVE)
+- **执行模式系统**: AP (All Perfect) / FC (Full Combo) / LIVE (通关保底) 三种预设
+- **连续执行浮动**: 每首歌自动随机切换模式 (默认 70% FC + 25% AP + 5% LIVE)
 - **Per-lane 独立随机化**: 每个轨道独立取随机偏移, 不再是全局统一抖动
 - **`_lane_to_x` 性能缓存**: 避免每帧重算轨道坐标
-- **CLI `--mode` 参数**: `python main.py start --mode AP` 指定打歌模式
+- **CLI `--mode` 参数**: `python main.py start --mode AP` 指定执行模式
 - **热键 M**: 运行时循环切换模式 (AP → FC → LIVE)
-- **Web 仪表盘**: 打歌模式下拉选择器
-- **config.yaml**: 新增 `batch_play.mode_weights` 配置
+- **Web 仪表盘**: 执行模式下拉选择器
+- **config.yaml**: 新增 `continuous.mode_weights` 配置
 
 ## [3.5.0] - 2026-05-28
 
@@ -293,7 +293,7 @@
 
 ## [2.0.0] - 2026-05-28
 
-- v2.0.0: Batch play (冲榜) - auto-repeat songs, result screen navigation, session stats
+- v2.0.0: Batch play (连续执行) - auto-repeat songs, result screen navigation, session stats
 
 ## [1.0.0] - 2026-05-28
 

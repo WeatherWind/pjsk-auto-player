@@ -78,7 +78,7 @@ class PjskApp:
             raise
 
     def run(self, mode: str = "live", infinite: bool = False):
-        """启动打歌主循环。"""
+        """启动执行主循环。"""
         self.mode = mode
         self.running = True
         self._stop_event.clear()
@@ -171,12 +171,12 @@ class PjskApp:
         logger.info("Stopping...")
 
     def pause(self):
-        """暂停打歌。"""
+        """暂停执行。"""
         self.paused = True
         logger.info("Paused")
 
     def resume(self):
-        """恢复打歌。"""
+        """恢复执行。"""
         self.paused = False
         logger.info("Resumed")
 

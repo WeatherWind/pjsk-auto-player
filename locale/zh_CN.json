@@ -1,0 +1,110 @@
+{
+  "app": {
+    "name": "PJSK Auto Player",
+    "description": "Project Sekai 自动化研究工具",
+    "version": "v{version}"
+  },
+  "play": {
+    "start": "开始运行",
+    "stop": "停止",
+    "pause": "暂停",
+    "resume": "继续",
+    "mode": {
+      "ap": "AP 模式",
+      "fc": "FC 模式",
+      "live": "LIVE 模式",
+      "auto": "混合策略"
+    }
+  },
+  "status": {
+    "idle": "空闲",
+    "running": "运行中",
+    "paused": "已暂停",
+    "stopped": "已停止",
+    "error": "错误"
+  },
+  "scene": {
+    "game": "运行中",
+    "result": "结算画面",
+    "menu": "主菜单",
+    "loading": "加载中",
+    "unknown": "未知页面"
+  },
+  "error": {
+    "game_stuck": "游戏卡住，尝试重启",
+    "game_bug": "游戏异常，尝试杀进程",
+    "page_unknown": "未知页面，尝试返回",
+    "connection_lost": "连接断开，等待重连",
+    "too_many_click": "点击次数过多，已停止",
+    "task_timeout": "任务超时"
+  },
+  "controller": {
+    "adb": "ADB 控制器",
+    "scrcpy": "scrcpy 控制器",
+    "minitouch": "minitouch 触摸",
+    "combined": "智能路由"
+  },
+  "config": {
+    "loading": "加载配置...",
+    "saved": "配置已保存",
+    "hot_reload": "配置已热加载",
+    "validation_error": "配置校验失败"
+  },
+  "pipeline": {
+    "task_start": "任务开始: {name}",
+    "task_complete": "任务完成: {name}",
+    "task_failed": "任务失败: {name}",
+    "task_retry": "重试中 ({count}/{max})"
+  },
+  "gui": {
+    "title": "PJSK Auto Player 控制面板",
+    "dark_mode": "深色模式",
+    "light_mode": "浅色模式",
+    "language": "语言",
+    "stats": {
+      "songs_played": "已打 {count} 首",
+      "fps": "FPS",
+      "latency": "延迟 (ms)",
+      "accuracy": "命中率"
+    }
+  },
+  "wizard": {
+    "welcome": "欢迎使用 PJSK Auto Player",
+    "step1": "选择语言",
+    "step2": "连接设备",
+    "step3": "屏幕校准",
+    "step4": "选择模式",
+    "step5": "完成设置",
+    "finish": "设置完成！开始运行 🎵"
+  },
+  "notification": {
+    "song_complete": "歌曲完成: {title}",
+    "error_occurred": "出现错误: {msg}",
+    "batch_complete": "连续执行完成: {count} 首"
+  },
+  "team": {
+    "builder": "编队助手",
+    "event_bonus": "活动加成: {bonus}%",
+    "total_power": "综合力: {power}"
+  },
+  "anti_detection": {
+    "enabled": "反检测已启用",
+    "jitter_timing": "时机抖动 ±{ms}ms",
+    "jitter_position": "位置偏移 ±{px}px",
+    "miss_sim": "随机漏键 {pct}%"
+  },
+  "cli": {
+    "help": "用法: python main.py [命令]",
+    "commands": {
+      "start": "开始运行",
+      "auto": "连续运行",
+      "web": "Web 控制面板",
+      "daemon": "后台守护进程",
+      "setup": "设置向导",
+      "calibrate": "一键校准",
+      "status": "查看状态",
+      "stop": "停止",
+      "config": "配置管理"
+    }
+  }
+}

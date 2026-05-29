@@ -2,7 +2,7 @@
 屏幕分析器 —— 通过 OpenCV 分析 PJSK 游戏画面, 检测:
 - 判定线上的 note (tap / flick / hold)
 - 判定线上方区域 (用于预测引擎提前发现 note)
-- 游戏状态 (选歌 / 打歌中 / 结算)
+- 游戏状态 (选歌 / 执行中 / 结算)
 - 实时校准辅助
 """
 
@@ -37,7 +37,7 @@ class NoteEvent:
 @dataclass
 class GameState:
     """游戏画面状态。"""
-    in_game: bool = False      # 是否在打歌中
+    in_game: bool = False      # 是否在执行中
     in_result: bool = False    # 是否在结算画面
     in_menu: bool = False      # 是否在菜单/选歌画面
     detected_notes: list[NoteEvent] = field(default_factory=list)
@@ -229,7 +229,7 @@ class ScreenAnalyzer:
     # ──────────────────────────────────────────
 
     def _is_game_screen(self, frame: np.ndarray) -> bool:
-        """判断当前画面是否为 PJSK 打歌界面。"""
+        """判断当前画面是否为 PJSK 执行界面。"""
         h, w = frame.shape[:2]
         y_center = self.judgment_y
         roi = frame[
@@ -580,7 +580,7 @@ class ScreenAnalyzer:
     def classify_screen(self, frame: np.ndarray) -> str:
         """
         快速分类当前画面: 'game' / 'result' / 'menu' / 'unknown'
-        用于冲榜模式自动导航。
+        用于连续执行自动导航。
         """
         if frame is None:
             return "unknown"

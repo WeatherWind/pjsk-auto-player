@@ -1,7 +1,7 @@
 {
   "name": "PJSK Auto Player",
   "short_name": "PJSK AP",
-  "description": "Project Sekai 自动打歌助手 — 手机控制面板",
+  "description": "Project Sekai 自动执行助手 — 手机控制面板",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d1117",

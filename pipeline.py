@@ -41,7 +41,7 @@ class TaskAction(str, Enum):
     CLICK_SELF = "ClickSelf"       # 在检测到的位置点击
     CLICK_XY = "ClickXY"           # 在指定坐标点击
     SWIPE = "Swipe"                # 滑动
-    TAP = "Tap"                    # 对每条判定线点击 (打歌用)
+    TAP = "Tap"                    # 对每条判定线点击 (执行用)
     WAIT = "Wait"                  # 等待指定时间
 
 
@@ -508,7 +508,7 @@ class PipelineEngine:
             logger.debug(f"[{task.name}] Swipe")
 
         elif action == TaskAction.TAP:
-            # 对每条判定线点击 (打歌用)
+            # 对每条判定线点击 (执行用)
             if self.analyzer:
                 for lx, ly in self.analyzer.get_lane_positions():
                     self.adb.tap(lx, ly)

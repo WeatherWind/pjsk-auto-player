@@ -49,7 +49,7 @@ class SceneDetector:
         detector = SceneDetector()
         result = detector.detect(frame)
         if result.scene == GameScene.GAME:
-            print(f"打歌中 (conf={result.confidence:.2f})")
+            print(f"执行中 (conf={result.confidence:.2f})")
             for match in result.matches:
                 print(f"  匹配到: {match.name}")
     """
@@ -192,7 +192,7 @@ class SceneDetector:
     # ── 便捷方法 ──────────────────────────────────────
 
     def is_game(self, frame: np.ndarray) -> bool:
-        """快速判断是否在打歌中。"""
+        """快速判断是否在执行中。"""
         return self.detect(frame, enable_ocr=False, enable_color=False).scene == GameScene.GAME
 
     def is_result(self, frame: np.ndarray) -> bool:
