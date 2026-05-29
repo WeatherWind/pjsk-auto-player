@@ -353,3 +353,57 @@ class CombinedController(BaseController):
             stats["screencap_min_ms"] = min(self._screencap_times)
             stats["screencap_max_ms"] = max(self._screencap_times)
         return stats
+
+    def benchmark(self, samples: int = 30) -> dict:
+        """Run a quick benchmark on all available backends.
+
+        Tests each backend's screencap performance and returns results.
+        Useful for detecting which backend is fastest on this device.
+
+        Args:
+            samples: Number of screencap samples per backend.
+
+        Returns:
+            Dict with per-backend results: latency avg/min/max ms, FPS estimate.
+        """
+        results = {}
+        for name, cls, meta in self._available_backends:
+            logger.info("Benchmarking '%s' (%d samples)...", name, samples)
+            try:
+                backend = cls(self.config)
+                if not backend.connect():
+                    results[name] = {"error": "connection failed"}
+                    continue
+
+                times = []
+                for _ in range(samples):
+                    t0 = time.perf_counter()
+                    frame = backend.screencap()
+                    elapsed = (time.perf_counter() - t0) * 1000
+                    if frame is not None:
+                        times.append(elapsed)
+
+                backend.disconnect()
+
+                if not times:
+                    results[name] = {"error": "all captures failed"}
+                    continue
+
+                avg = sum(times) / len(times)
+                results[name] = {
+                    "latency_avg_ms": round(avg, 1),
+                    "latency_min_ms": round(min(times), 1),
+                    "latency_max_ms": round(max(times), 1),
+                    "fps_estimate": round(1000 / avg, 1) if avg > 0 else 0,
+                    "samples": len(times),
+                    "description": meta.get("description", ""),
+                }
+                logger.info(
+                    "  %s: avg=%.1fms, fps=%.1f, samples=%d",
+                    name, avg, 1000 / avg if avg > 0 else 0, len(times),
+                )
+            except Exception as e:
+                results[name] = {"error": str(e)}
+                logger.warning("Benchmark '%s' failed: %s", name, e)
+
+        return results

@@ -47,12 +47,16 @@ class OcrReader:
         self, engine: str = "auto",
         lang: list[str] | None = None,
         scale: float = 2.0,
+        letter_color: tuple[int, int, int] | None = None,
+        letter_threshold: int = 30,
     ) -> None:
         """
         Args:
             engine: OCR 引擎, "auto" | "easyocr" | "tesseract"
             lang: 语言列表 (EasyOCR: ["ch_sim", "en"]; tesseract: "chi_sim+eng")
             scale: ROI 缩放倍数 (放大有助于识别)
+            letter_color: 目标文字颜色 (r, g, b), 用于颜色过滤预处理 (ALAS 启发式)
+            letter_threshold: 颜色相似度阈值 (0-255 距离)
         """
         self._engine = engine
         self._lang = lang or ["ch_sim", "en"]
@@ -60,7 +64,12 @@ class OcrReader:
         self._reader = None
         self._engine_name = "uninitialized"
 
-        logger.info(f"OcrReader 创建, engine={engine}, lang={self._lang}")
+        # ALAS 启发式: 颜色提取预处理
+        self._letter_color: tuple[int, int, int] | None = letter_color
+        self._letter_threshold: int = letter_threshold
+
+        logger.info(f"OcrReader 创建, engine={engine}, lang={self._lang}"
+                    f"{', color_preprocess=' + str(letter_color) if letter_color else ''}")
 
     # ── 初始化 ──────────────────────────────────────────
 
@@ -226,12 +235,16 @@ class OcrReader:
         return self._preprocess(roi_img) if preprocess else roi_img
 
     def _preprocess(self, img: np.ndarray) -> np.ndarray:
-        """预处理图像: 放大 + 灰度 + 二值化。"""
+        """预处理图像: 颜色过滤 (ALAS启发式) + 放大 + 灰度 + 二值化。"""
         # 放大
         if self._scale != 1.0:
             new_w = int(img.shape[1] * self._scale)
             new_h = int(img.shape[0] * self._scale)
             img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+
+        # ALAS 启发式: 保留指定颜色
+        if self._letter_color is not None and len(img.shape) == 3:
+            img = self._color_similarity_2d(img, self._letter_color)
 
         # 灰度
         if len(img.shape) == 3:
@@ -242,6 +255,31 @@ class OcrReader:
         # 二值化 (OTSU)
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         return binary
+
+    def _color_similarity_2d(
+        self, image: np.ndarray, color: tuple[int, int, int],
+    ) -> np.ndarray:
+        """ALAS 启发式: 保留与指定颜色相似的像素，其余设为黑色。
+
+        计算每个像素与目标颜色的欧氏距离，超过阈值则置零。
+
+        Args:
+            image: BGR numpy array (h, w, 3)
+            color: 目标颜色 (r, g, b) — 注意 OpenCV 是 BGR 格式
+
+        Returns:
+            过滤后的图像 (非目标颜色的像素设为 0)
+        """
+        # image is BGR, color is (r, g, b) — convert to BGR for comparison
+        bgr_color = (color[2], color[1], color[0])
+        diff = np.linalg.norm(
+            image.astype(np.float32) - np.array(bgr_color, dtype=np.float32),
+            axis=2,
+        )
+        mask = diff < self._letter_threshold
+        result = image.copy()
+        result[~mask] = 0
+        return result
 
     def _read_easyocr(
         self, image: np.ndarray, whitelist: str | None = None,

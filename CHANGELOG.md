@@ -5,6 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [4.10.0] - 2026-05-29
+
+### 🧬 ALAS 深度集成
+
+#### 新增 ALAS 工具模块 (`lib/`)
+
+- **`cached_property` 装饰器** (`lib/decorators.py`): 比 `functools.cached_property` 更强，支持 `__dict__.pop()` 手动失效、线程安全锁保护、`__delete__` 支持
+- **`classproperty`**: 类级别只读属性
+- **`once_per_frame`**: 单帧缓存装饰器，避免重复计算
+- **Resource 资源管理器** (`lib/resource.py`): 全局资源跟踪 + 一次性释放，weakref 防止内存泄漏
+- **`LazyResource`**: 延迟加载资源，配合 `cached_property` 自动管理
+
+#### OCR 颜色预处理 (`vision/ocr.py`)
+
+- **`letter_color` / `letter_threshold`**: 新增 ALAS 启发式颜色提取预处理
+- **`_color_similarity_2d()`**: 保留指定颜色像素，其余置零（欧氏距离过滤）
+- 适用于 Project Sekai 中特定颜色文字（金色分数、彩色判定等）的识别场景
+
+#### Controller 性能 Benchmark (`controller/combined.py`)
+
+- **`benchmark(samples=30)`**: 对所有可用后端执行 screencap 基准测试
+- 返回每个后端的平均/最小/最大延迟和 FPS 估算
+- 自动连接/断开各后端，不影响当前运行的活跃后端
+
 ## [4.9.1] - 2026-05-29
 
 ### 🔧 Bugfix & Integration Round
