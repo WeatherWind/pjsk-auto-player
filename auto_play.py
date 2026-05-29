@@ -371,7 +371,7 @@ class AutoPlayer:
         self._lane_positions: Optional[list] = None
 
         # ════════════════════════════════════════════
-        # 点击随机化 (反封号) 参数
+        # 操作随机化参数
         # ════════════════════════════════════════════
         rand_cfg = config.get("randomization", {})
         self.rand_enabled = rand_cfg.get("enabled", True)

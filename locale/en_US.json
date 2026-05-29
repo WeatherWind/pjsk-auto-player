@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "PJSK Auto Player",
-    "description": "Project Sekai Automation Research Tool",
+    "description": "Computer Vision Automation Research Tool",
     "version": "v{version}"
   },
   "play": {
@@ -10,9 +10,9 @@
     "pause": "Pause",
     "resume": "Resume",
     "mode": {
-      "ap": "AP Mode",
-      "fc": "FC Mode",
-      "live": "LIVE Mode",
+      "ap": "Precision Strategy",
+      "fc": "Stability Strategy",
+      "live": "Basic Strategy",
       "auto": "Mixed Strategy"
     }
   },
@@ -24,15 +24,15 @@
     "error": "Error"
   },
   "scene": {
-    "game": "In Game",
+    "game": "Monitoring",
     "result": "Result Screen",
     "menu": "Main Menu",
     "loading": "Loading",
     "unknown": "Unknown Page"
   },
   "error": {
-    "game_stuck": "Game stuck, attempting restart",
-    "game_bug": "Game bug detected, killing process",
+    "game_stuck": "Screen frozen, refreshing",
+    "game_bug": "State anomaly, resetting process",
     "page_unknown": "Unknown page, navigating back",
     "connection_lost": "Connection lost, waiting reconnect",
     "too_many_click": "Too many clicks, stopped",
@@ -57,15 +57,15 @@
     "task_retry": "Retrying ({count}/{max})"
   },
   "gui": {
-    "title": "PJSK Auto Player Dashboard",
+    "title": "Automation Dashboard",
     "dark_mode": "Dark Mode",
     "light_mode": "Light Mode",
     "language": "Language",
     "stats": {
-      "songs_played": "{count} songs played",
+      "songs_played": "{count} rounds completed",
       "fps": "FPS",
-      "latency": "Latency (ms)",
-      "accuracy": "Accuracy"
+      "latency": "Response Latency (ms)",
+      "accuracy": "Precision Rate"
     }
   },
   "wizard": {
@@ -75,23 +75,23 @@
     "step3": "Screen Calibration",
     "step4": "Select Mode",
     "step5": "Setup Complete",
-    "finish": "Setup complete! Let's play 🎵"
+    "finish": "Setup complete! Ready to run"
   },
   "notification": {
-    "song_complete": "Song complete: {title}",
+    "song_complete": "Round complete: {title}",
     "error_occurred": "Error occurred: {msg}",
-    "batch_complete": "Batch complete: {count} songs"
+    "batch_complete": "Batch complete: {count} rounds"
   },
   "team": {
-    "builder": "Team Builder",
-    "event_bonus": "Event Bonus: {bonus}%",
-    "total_power": "Total Power: {power}"
+    "builder": "Config Assistant",
+    "event_bonus": "Bonus: {bonus}%",
+    "total_power": "Total: {power}"
   },
   "anti_detection": {
-    "enabled": "Anti-Detection Enabled",
-    "jitter_timing": "Timing jitter ±{ms}ms",
-    "jitter_position": "Position jitter ±{px}px",
-    "miss_sim": "Random miss {pct}%"
+    "enabled": "Operation Randomization Active",
+    "jitter_timing": "Timing perturbation ±{ms}ms",
+    "jitter_position": "Position perturbation ±{px}px",
+    "miss_sim": "Interval variation {pct}%"
   },
   "cli": {
     "help": "Usage: python main.py [command]",

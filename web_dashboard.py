@@ -730,7 +730,7 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 <div class="card" style="text-align:center">
 <h2 style="color:var(--ac);margin-bottom:4px">🎵 PJSK Auto Player</h2>
 <p style="color:var(--td);font-size:14px" id="about-version">v4.3.0</p>
-<p style="color:var(--td);font-size:13px;margin:8px 0">基于 ADB+OpenCV 的 Project Sekai 自动执行<br>原生桌面窗口 · 预测引擎 · Pipeline · 连续执行 · 反封号</p>
+<p style="color:var(--td);font-size:13px;margin:8px 0">基于 ADB+OpenCV 的计算机视觉自动化研究<br>预测引擎 · Pipeline 流水线 · 操作随机化</p>
 <p style="font-size:13px"><a href="https://github.com/WeatherWind/pjsk-auto-player" target="_blank" style="color:var(--ac)">GitHub</a></p>
 <div id="vt" style="margin-top:16px;text-align:left"></div></div>
 </div>

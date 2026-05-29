@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "PJSK Auto Player",
-    "description": "プロジェクトセカイ 自動化研究ツール",
+    "description": "コンピュータビジョン自動化研究ツール",
     "version": "v{version}"
   },
   "play": {
@@ -10,9 +10,9 @@
     "pause": "一時停止",
     "resume": "再開",
     "mode": {
-      "ap": "AP モード",
-      "fc": "FC モード",
-      "live": "LIVE モード",
+      "ap": "精密戦略",
+      "fc": "安定戦略",
+      "live": "基本戦略",
       "auto": "混合戦略"
     }
   },
@@ -24,15 +24,15 @@
     "error": "エラー"
   },
   "scene": {
-    "game": "演奏中",
-    "result": "リザルト画面",
+    "game": "監視中",
+    "result": "結果画面",
     "menu": "メインメニュー",
     "loading": "ロード中",
     "unknown": "不明な画面"
   },
   "error": {
-    "game_stuck": "ゲームが固まりました、再起動を試みます",
-    "game_bug": "ゲームの異常を検出、プロセスを終了します",
+    "game_stuck": "画面が静止、リフレッシュします",
+    "game_bug": "状態異常、プロセスをリセットします",
     "page_unknown": "不明なページ、戻ります",
     "connection_lost": "接続が切れました、再接続を待機中",
     "too_many_click": "クリック回数が多すぎます、停止しました",
@@ -57,15 +57,15 @@
     "task_retry": "再試行中 ({count}/{max})"
   },
   "gui": {
-    "title": "PJSK Auto Player ダッシュボード",
+    "title": "自動化ダッシュボード",
     "dark_mode": "ダークモード",
     "light_mode": "ライトモード",
     "language": "言語",
     "stats": {
-      "songs_played": "{count} 曲演奏済み",
+      "songs_played": "{count} ラウンド完了",
       "fps": "FPS",
-      "latency": "遅延 (ms)",
-      "accuracy": "命中率"
+      "latency": "応答遅延 (ms)",
+      "accuracy": "精度"
     }
   },
   "wizard": {
@@ -75,12 +75,12 @@
     "step3": "画面キャリブレーション",
     "step4": "モードを選択",
     "step5": "セットアップ完了",
-    "finish": "セットアップ完了！演奏を始めましょう 🎵"
+    "finish": "セットアップ完了！実行を開始します"
   },
   "notification": {
-    "song_complete": "楽曲完了: {title}",
+    "song_complete": "ラウンド完了: {title}",
     "error_occurred": "エラー発生: {msg}",
-    "batch_complete": "周回完了: {count} 曲"
+    "batch_complete": "連続実行完了: {count} ラウンド"
   },
   "team": {
     "builder": "編成アシスタント",
@@ -88,10 +88,10 @@
     "total_power": "総合力: {power}"
   },
   "anti_detection": {
-    "enabled": "検知対策 有効",
-    "jitter_timing": "タイミング揺らぎ ±{ms}ms",
-    "jitter_position": "位置揺らぎ ±{px}px",
-    "miss_sim": "ランダムミス {pct}%"
+    "enabled": "操作ランダム化 有効",
+    "jitter_timing": "タイミング摂動 ±{ms}ms",
+    "jitter_position": "位置摂動 ±{px}px",
+    "miss_sim": "間隔変動 {pct}%"
   },
   "cli": {
     "help": "使用法: python main.py [コマンド]",
