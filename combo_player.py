@@ -306,8 +306,7 @@ class ComboPlayer:
             time.sleep(1.0)
 
             # 点击难度
-            diff_map = {"easy": 0, "normal": 1, "hard": 2, "expert": 3, "master": 4,
-                        "easy": 0, "normal": 1, "hard": 2, "expert": 3, "master": 4}
+            diff_map = {"easy": 0, "normal": 1, "hard": 2, "expert": 3, "master": 4}
             diff_idx = diff_map.get(difficulty, 3)
             diff_y = nav.get("difficulty_y_start", int(self.screen_h * 0.45))
             diff_spacing = nav.get("difficulty_spacing", 60)

@@ -14,10 +14,11 @@ adb:
   device_serial: ""
 
   # screencap 方法:
-  #   "exec-out"  - adb exec-out screencap -p (推荐, 5-15 FPS)
+  #   "auto"      - 自动检测最快可用后端: scrcpy (30-60 FPS) > ADB (推荐)
+  #   "exec-out"  - adb exec-out screencap -p (5-15 FPS)
   #   "file"      - adb shell screencap + adb pull (较慢, 兼容性最佳)
-  #   "scrcpy"    - 通过 scrcpy 视频流获取画面 (30-60 FPS, 需额外安装 scrcpy)
-  screencap_method: "exec-out"
+  #   "scrcpy"    - 仅 scrcpy (需安装)
+  screencap_method: "auto"
 
   # 截图临时目录 (仅 screencap_method=file 时需要)
   temp_dir: "/sdcard/"
@@ -30,14 +31,17 @@ scrcpy:
   executable: "scrcpy"
 
   # 最大 FPS 限制 (scrcpy 实际帧率取决于手机和 USB)
-  max_fps: 30
+  max_fps: 60
 
-  # 视频码率 (bps)
-  bit_rate: 8000000
+  # 视频码率 (bps) — 高码率降低模糊延迟
+  bit_rate: 12000000
 
   # 分辨率缩放 (1=原始, 0.5=半分辨率, 0.25=四分之一)
   # 低分辨率可以提高帧率, 但不影响触摸坐标 (scrcpy 会自动映射)
   scale: 0.5
+
+  # 帧跳过: 只处理最新帧, 丢弃积压旧帧以降低处理延迟
+  frame_skip: true
 
 # ============================================================
 # 屏幕参数 (根据手机分辨率设置)
@@ -184,7 +188,8 @@ timing:
   latency_compensation_ms: 0
 
   # 单帧间隔下限 (毫秒), 防止无限循环跑太快
-  min_frame_interval_ms: 10
+  # 推荐: 5ms (ADB) 或 3ms (scrcpy)
+  min_frame_interval_ms: 5
 
   # 超时检测: 多久没检测到判定线活动就认为歌曲结束 (秒)
   game_over_timeout: 5.0

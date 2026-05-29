@@ -293,6 +293,9 @@ class AutoPlayer:
         # 预测参数
         self.use_prediction = config.get("prediction", {}).get("enabled", True)
 
+        # ═══ 缓存: 避免每帧重建 ═══
+        self._lane_positions: Optional[list] = None
+
         # ════════════════════════════════════════════
         # 点击随机化 (反封号) 参数
         # ════════════════════════════════════════════
@@ -450,6 +453,7 @@ class AutoPlayer:
                 self.cfg["screen"]["height"] = actual_h
                 self.analyzer = ScreenAnalyzer(self.cfg)
                 self.tracker = NoteTracker(self.cfg)
+                self._lane_positions = None
         except Exception as e:
             logger.warning(f"获取屏幕分辨率失败: {e}")
 
@@ -560,11 +564,12 @@ class AutoPlayer:
             if self.show_stats and self._stats["frames"] % self.stats_interval == 0:
                 self._print_stats()
 
-            # 8. 帧率控制
+            # 8. 帧率控制 (自适应: 不强制 sleep 如果已经跑慢了)
             elapsed = time.perf_counter() - loop_start
-            sleep_time = self.min_interval - elapsed
-            if sleep_time > 0:
+            if elapsed < self.min_interval:
+                sleep_time = self.min_interval - elapsed
                 time.sleep(sleep_time)
+            # 不 sleep: 已经慢了, 直接进下一帧
 
     def _check_keyboard(self) -> bool:
         """
@@ -735,12 +740,14 @@ class AutoPlayer:
                     logger.debug(f"[PRED] TAP lane={trigger['lane']} @({trigger['x']},{trigger['y']})")
 
         # 判定线 notes (备用)
+        if self._lane_positions is None:
+            self._lane_positions = self.analyzer.get_lane_positions()
         self._process_notes(state)
 
     def _process_notes(self, state: GameState) -> None:
-        """处理检测到的判定线 notes。"""
+        """处理检测到的判定线 notes (使用缓存的轨道位置)。"""
         current_active = set()
-        lane_positions = self.analyzer.get_lane_positions()
+        lane_positions = self._lane_positions or self.analyzer.get_lane_positions()
 
         for note in state.detected_notes:
             lane_x, lane_y = lane_positions[note.lane]

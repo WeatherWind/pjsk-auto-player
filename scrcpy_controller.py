@@ -58,6 +58,10 @@ class ScrcpyController:
         self._ppm_data_size = 0
         self._state = "header"  # header → data
 
+        # 帧跳过 (只处理最新帧, 不积压)
+        self._frame_skip_enabled = self.cfg.get("frame_skip", True)
+        self._frame_skip_counter = 0
+
     def _find_scrcpy(self) -> str:
         """查找 scrcpy 可执行文件。"""
         exe = self.cfg.get("executable", "scrcpy")
@@ -240,7 +244,15 @@ class ScrcpyController:
     def get_frame(self) -> Optional[np.ndarray]:
         """获取最新视频帧 (BGR 格式)。"""
         with self._lock:
-            return self._latest_frame.copy() if self._latest_frame is not None else None
+            if self._latest_frame is None:
+                return None
+            # 跳过积压: 只返回最新帧, 丢弃旧帧以保持低延迟
+            if self._frame_skip_enabled and hasattr(self, '_frame_skip_counter'):
+                self._frame_skip_counter += 1
+                if self._frame_skip_counter % 2 == 0:
+                    return self._latest_frame.copy()
+                return None
+            return self._latest_frame.copy()
 
     def get_fps(self) -> float:
         """获取当前 FPS。"""

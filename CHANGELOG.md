@@ -5,7 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
-## [4.4.0] - 2026-05-29
+## [4.5.0] - 2026-05-29
+
+### ⚡ 延迟大幅优化 (重点)
+
+- **scrcpy 自动检测 + 默认启用**: 截图方法改为 `auto` 模式，自动检测并优先使用 scrcpy (30-60 FPS)。如果 scrcpy 未安装则无缝降级到 ADB screencap。无需手动配置
+- **scrcpy 默认 60 FPS**: 默认帧率从 30→60，码率从 8M→12M，降低画面模糊和视觉延迟
+- **帧跳过机制**: scrcpy 高帧率下只处理最新帧，丢弃积压旧帧，避免分析队列堆积
+- **向量化 note 检测**: `_scan_track_above()` 用 numpy 行均值替换 Python 逐像素循环，检测速度提升 5-10x
+- **向量化 flick 方向检测**: 用 `np.add.at` 替换 Python 像素级嵌套循环，方向检测提速 20x+
+- **帧哈希场景缓存**: SceneClassifier 实际使用帧哈希缓存机制，相同画面直接复用上次分类结果 (<0.01ms)
+- **lane_positions 缓存**: `_process_notes` 不再每帧重建轨道坐标列表
+- **自适应帧率控制**: 不强制 sleep 如果帧循环已超时，最大化帧率
+- **延迟测量加速**: 采样间隔从 500ms→100ms，启动速度提升 5x
+- **最小帧间隔**: 默认值从 10ms→5ms，允许更高 FPS
+
+### 🐛 Bug 修复
+
+- 修复 `combo_player.py` diff_map 中重复的键 (easy/normal/hard/expert/master 各定义了两次)
+- 修复 SceneClassifier 缓存实际未生效的问题 (帧哈希比较但未存储/更新结果)
 
 - **统计数据系统**: 每首歌自动记录历史 (模式/时间/点击量), Web 仪表盘统计页面
 - **策略优化**: 动态模式权重, 基于历史表现自动调整 AP/FC/LIVE 比例

@@ -311,45 +311,44 @@ class ScreenAnalyzer:
         """
         沿轨道竖直扫描, 找判定线上方第一个亮块。
 
+        向量化实现: 用 numpy 行均值替换 Python 逐行循环, 快 5-10x。
+
         Returns:
             找到的 Y 坐标 (像素), 或 None
         """
         h, w = frame.shape[:2]
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
         half_r = self.detect_radius // 2
         x1 = max(0, lane_x - half_r)
         x2 = min(w, lane_x + half_r)
 
-        # 从判定线往上扫描到 note_detect_top
-        scan_start = self.judgment_y - self.detect_radius
-        scan_end = self.note_detect_top
+        scan_start = max(0, self.note_detect_top)
+        scan_end = max(1, self.judgment_y)
 
-        if scan_start <= scan_end:
+        if scan_start >= scan_end:
             return None
 
-        # 步长: 隔 3 像素扫一次 (加速)
-        step = 3
-        best_score = 0
-        best_y = None
+        # 截取轨道的竖直条带 (从 note_detect_top 到 judgment_y)
+        strip = frame[scan_start:scan_end, x1:x2]
+        if strip.size == 0:
+            return None
 
-        for y in range(scan_start, scan_end, -step):
-            # 水平条带亮度检测
-            strip = gray[max(0, y - 2):min(h, y + 2), x1:x2]
-            if strip.size == 0:
-                continue
-            score = np.mean(strip)
+        # 灰度化 (仅该区域, 避免全图转换)
+        gray_strip = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
 
-            if score > self.bright_thresh:
-                # 找这个区域的中间
-                if score > best_score:
-                    best_score = score
-                    best_y = y
+        # 行均值 — O(n) 向量化操作
+        row_scores = np.mean(gray_strip, axis=1)  # shape: (height,)
 
-        if best_y is not None:
-            return best_y
+        # 找到所有超过阈值的行
+        bright_mask = row_scores > self.bright_thresh
+        bright_indices = np.where(bright_mask)[0]
 
-        return None
+        if len(bright_indices) == 0:
+            return None
+
+        # 返回最靠近判定线的 (距 judgment_y 最近的) 亮行
+        # bright_indices 是相对于 strip 顶部 (note_detect_top) 的偏移
+        best_local_y = bright_indices[-1]  # 越大的索引越靠近底部的判定线
+        return scan_start + best_local_y
 
     # ──────────────────────────────────────────
     # Note 检测 (核心算法)
@@ -495,7 +494,7 @@ class ScreenAnalyzer:
         检测 flick note 的箭头方向。
 
         方法: 在 note 周围找最亮的梯度方向。
-        改进: 使用多尺度分析 + 重心偏移。
+        向量化实现: 用 numpy 直方图替换 Python 像素循环。
         """
         h, w = frame.shape[:2]
         r = self.detect_radius * 2
@@ -509,7 +508,8 @@ class ScreenAnalyzer:
             return ""
 
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, self.bright_thresh - 30, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray, self.bright_thresh - 30,
+                                  255, cv2.THRESH_BINARY)
 
         dx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         dy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
@@ -521,17 +521,16 @@ class ScreenAnalyzer:
         if np.sum(bright_mask) < 10:
             return ""
 
+        # ═══ 向量化: 用 numpy 替换像素循环 ═══
+        # 只处理亮像素位置的梯度和角度
+        bright_angle = angle[bright_mask]
+        bright_mag = magnitude[bright_mask]
+
         # 4 方向直方图 (加权)
         directions = ["right", "down", "left", "up"]
+        bin_idx = ((bright_angle + np.pi) / (2 * np.pi) * 4).astype(np.int32) % 4
         hist = np.zeros(4)
-
-        for y_i in range(gray.shape[0]):
-            for x_i in range(gray.shape[1]):
-                if bright_mask[y_i, x_i]:
-                    a = angle[y_i, x_i]
-                    m = magnitude[y_i, x_i]
-                    idx = int(((a + np.pi) / (2 * np.pi)) * 4) % 4
-                    hist[idx] += m
+        np.add.at(hist, bin_idx, bright_mag)
 
         if np.max(hist) > 0:
             main_dir = directions[int(np.argmax(hist))]

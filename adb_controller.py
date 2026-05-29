@@ -165,10 +165,30 @@ class ADBController:
         截取手机屏幕, 返回 BGR numpy 数组 (OpenCV 格式)。
 
         自动选择已配置的截图方法。
+        自动检测 scrcpy: 若安装则默认使用 (30-60 FPS), 否则降级到 ADB screencap。
         """
         import cv2  # 延迟导入
 
-        method = self.cfg.get("screencap_method", "exec-out")
+        method = self.cfg.get("screencap_method", "auto")
+
+        # ===== 新增: auto 模式 — 自动检测最快可用后端 =====
+        if method == "auto":
+            # 检查是否已有 scrcpy 实例运行
+            if hasattr(self, '_scrcpy_instance') and self._scrcpy_instance:
+                return self._screencap_scrcpy()
+            # 尝试自动检测 scrcpy
+            try:
+                import shutil
+                if shutil.which("scrcpy"):
+                    logger.debug("scrcpy 已检测到, 自动启用 scrcpy 后端")
+                    self.cfg["screencap_method"] = "scrcpy"
+                    return self._screencap_scrcpy()
+            except Exception:
+                pass
+            # scrcpy 不可用, 降级到 exec-out
+            logger.debug("scrcpy 未安装, 使用 ADB exec-out (5-15 FPS)")
+            self.cfg["screencap_method"] = "exec-out"
+            return self._screencap_execout()
 
         if method == "scrcpy":
             return self._screencap_scrcpy()
@@ -615,7 +635,7 @@ class ADBController:
             t3 = time.perf_counter()
             tap_times.append((t3 - t2) * 1000)
 
-            time.sleep(0.5)
+            time.sleep(0.1)
 
         result = {}
         if screencap_times:
