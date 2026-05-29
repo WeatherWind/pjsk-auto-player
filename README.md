@@ -9,7 +9,8 @@
 
 | 版本 | 特性 |
 |------|------|
-| **v4.5.0** 🆕 | ⚡ 延迟大幅优化: scrcpy 自动检测+60FPS、向量化检测 5-10x、帧跳过、缓存加速、默认 frame_skip |
+| **v4.5.0** 🆕 | ⚖️ 法律合规: TERMS.md + 首次确认 + CI Release 自动用 CHANGELOG 生成发布说明 |
+| | ⚡ 延迟优化: scrcpy 自动检测+60FPS、向量化检测 5-10x、帧跳过、minitouch 启动加速 5x |
 | **v4.4.0** | 打歌模式 (AP/FC/LIVE) + 模式浮动 + 点击随机化反封号 |
 | **v4.0.0** | 纯 Web 操控 + scrcpy/minitouch 自动启用 + 原生窗口 (PyWebView) |
 | **v3.9.0** | 开箱即用: ADB 自动下载 + 一键启动脚本 |
@@ -415,21 +416,22 @@ pip install pyinstaller
 ### 自动构建与发布 (GitHub Actions)
 
 每次推送到 `main` 分支时:
-1. CI 自动构建 **Windows / macOS / Linux** 三平台可执行文件
-2. 自动发布到 GitHub Releases: **Continuous Build** (持续构建)
-3. 可执行文件可直接从 Releases 页面下载
+1. CI 自动构建 **Windows / macOS / Linux** 三平台单文件可执行文件
+2. Release 自动发布到 GitHub Releases: **Continuous Build** (持续构建)
+3. Release 说明自动从 **CHANGELOG.md** 提取对应版本的更新内容
+4. 可执行文件 + 文档 (README / TERMS / CHANGELOG) 一起发布
 
 推送 `v*` tag 时:
 1. 同样构建三平台可执行文件
-2. 创建 **正式版本 Release** (带有版本号)
-3. 自动生成更新日志 (基于 git log)
+2. 创建 **正式版本 Release** (带有版本号，标记为 Latest)
+3. Release 说明同样使用 CHANGELOG.md 内容
 
 ```bash
-# 日常更新: 推送后自动构建, 从 Releases 下载
+# 日常更新: 推送后自动构建, 从 Releases 下载可执行文件
 git push origin main
 
-# 发版: 自动构建 + 正式 Release + 更新日志
-git tag v3.5.0
+# 发版: 自动构建 + 正式 Release
+git tag v4.5.0
 git push origin main --tags
 ```
 

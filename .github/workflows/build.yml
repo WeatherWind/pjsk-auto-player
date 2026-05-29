@@ -43,11 +43,16 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
+          # 打包 README / TERMS / CHANGELOG 到可执行文件中
           pyinstaller \
             --onefile \
             --name "${{ matrix.artifact_name }}" \
             --add-data "tasks:tasks" \
             --add-data "templates:templates" \
+            --add-data "README.md:." \
+            --add-data "TERMS.md:." \
+            --add-data "CHANGELOG.md:." \
+            --add-data "VERSION:." \
             --hidden-import cv2 \
             --hidden-import numpy \
             --hidden-import yaml \
@@ -60,6 +65,7 @@ jobs:
             --hidden-import scene_classifier \
             --hidden-import capture_optimizer \
             --hidden-import setup_wizard \
+            --hidden-import scrcpy_controller \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module scipy \
@@ -74,56 +80,43 @@ jobs:
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.artifact_name }}
-          retention-days: 1  # 只需保留到 release 步骤
+          retention-days: 1
 
-  # ── 每次 push 到 main: 发布到 Releases ──
+  # ── Release: 每次 push 到 main 都发布 ──
   release:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 获取所有 tag 用于生成 changelog
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
           pattern: pjsk-auto-player-*
           merge-multiple: true
 
+      - name: Bundle legal docs with release
+        run: |
+          cp README.md TERMS.md CHANGELOG.md VERSION .
+
       - name: Determine release tag
         id: tag
         run: |
+          VERSION=$(cat VERSION)
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
           else
-            # 每次 push 到 main: 用日期+短SHA作为tag
+            # 持续构建: 用版本号+日期
             TAG="continuous-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "release_name=PJSK Auto Player $TAG" >> $GITHUB_OUTPUT
+          echo "release_name=PJSK Auto Player v${VERSION} ($TAG)" >> $GITHUB_OUTPUT
 
-      - name: Generate release notes
+      - name: Generate release notes from CHANGELOG
         id: notes
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # 版本发布: 生成从上一个 tag 到当前的 changelog
-            PREV=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
-            if [ -n "$PREV" ]; then
-              echo "## Changes since $PREV" > /tmp/release_notes.md
-              git log --oneline --no-decorate "$PREV..HEAD" >> /tmp/release_notes.md
-            else
-              echo "Initial release" > /tmp/release_notes.md
-            fi
-          else
-            # 持续构建: 显示最近 commits
-            echo "## Continuous Build" > /tmp/release_notes.md
-            echo "" >> /tmp/release_notes.md
-            echo "Commit: ${GITHUB_SHA::7}" >> /tmp/release_notes.md
-            echo "Branch: ${{ github.ref_name }}" >> /tmp/release_notes.md
-            echo "" >> /tmp/release_notes.md
-            echo "### Recent commits" >> /tmp/release_notes.md
-            git log --oneline --no-decorate -10 "origin/main" 2>/dev/null >> /tmp/release_notes.md
-          fi
+          python3 scripts/gen_release_notes.py
           echo "file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
 
       - name: Create/Update Release
@@ -136,6 +129,10 @@ jobs:
             pjsk-auto-player-linux-x86_64
             pjsk-auto-player-macos-universal
             pjsk-auto-player-windows-x86_64.exe
+            README.md
+            TERMS.md
+            CHANGELOG.md
+            VERSION
           allowUpdates: true
           makeLatest: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}

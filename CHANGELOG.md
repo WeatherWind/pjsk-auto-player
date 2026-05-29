@@ -14,6 +14,13 @@
 - **READMD 免责声明全面重写**: 包含 ToS 原文引用、风险降低建议表、关系声明
 - **源代码头部法律提示**: 所有入口文件标注法律风险提示
 
+### 🏗️ CI/CD 优化
+
+- **Release Notes 自动从 CHANGELOG.md 生成**: 每次构建时用 `scripts/gen_release_notes.py` 提取当前版本内容，替代原始 git log
+- **构建包含所有文档**: README.md / TERMS.md / CHANGELOG.md / VERSION 打包到可执行文件和 Release 中
+- **修复 CI 依赖**: 添加 `scrcpy_controller` 等缺失的隐式导入
+- **build.spec 更新**: 同步文档文件和隐式导入列表
+
 ### ⚡ 延迟大幅优化 (重点)
 
 - **scrcpy 自动检测 + 默认启用**: 截图方法改为 `auto` 模式，自动检测并优先使用 scrcpy (30-60 FPS)。如果 scrcpy 未安装则无缝降级到 ADB screencap。无需手动配置
