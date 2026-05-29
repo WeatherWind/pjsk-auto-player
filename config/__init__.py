@@ -332,3 +332,18 @@ def get_config_loader() -> ConfigLoader:
 def load_config(profile: str = "") -> dict:
     """便捷方法：加载配置。"""
     return get_config_loader().load(profile)
+
+
+def validate_config(config: dict | None = None) -> list:
+    """校验配置的正确性。
+
+    Args:
+        config: 待校验配置字典, 为 None 时使用当前加载的配置
+
+    Returns:
+        SchemaError 列表, 空列表表示通过校验
+    """
+    from config.schema import validate_config as _validate
+    if config is None:
+        config = get_config_loader().config
+    return _validate(config)

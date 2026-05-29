@@ -131,6 +131,34 @@ class DeviceNotConnectedError(PjskError):
     recoverable = False
 
 
+class RequestHumanTakeover(PjskError):
+    """需要用户介入（无法自动处理的情况）。"""
+
+    code = "HUMAN_TAKEOVER"
+    message = "需要用户介入处理"
+    recoverable = False
+    should_notify = True
+    should_save_screenshot = True
+
+
+class SongSelectError(PjskError):
+    """选歌失败（歌曲不存在、被锁定等）。"""
+
+    code = "SONG_SELECT_ERROR"
+    message = "选歌失败"
+    recoverable = True
+    should_notify = True
+
+
+class ResourceExhaustedError(PjskError):
+    """资源耗尽（体力/次数用完）。"""
+
+    code = "RESOURCE_EXHAUSTED"
+    message = "资源耗尽"
+    recoverable = False
+    should_notify = True
+
+
 # ── 错误恢复策略注册表 ──
 
 RecoveryStrategy = dict[str, dict]  # {error_code: {action, retry_delay, max_retries}}
@@ -177,6 +205,24 @@ DEFAULT_RECOVERY_STRATEGIES: RecoveryStrategy = {
         "retry_delay": 1.0,
         "max_retries": 10,
         "description": "增加阈值后重试识别",
+    },
+    "HUMAN_TAKEOVER": {
+        "action": "notify_user",
+        "retry_delay": 0,
+        "max_retries": 0,
+        "description": "发送通知等待用户介入",
+    },
+    "SONG_SELECT_ERROR": {
+        "action": "skip_task",
+        "retry_delay": 2.0,
+        "max_retries": 3,
+        "description": "跳过当前歌曲，尝试下一首",
+    },
+    "RESOURCE_EXHAUSTED": {
+        "action": "stop",
+        "retry_delay": 0,
+        "max_retries": 0,
+        "description": "停止任务并通知用户",
     },
 }
 
