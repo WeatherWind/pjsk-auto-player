@@ -606,21 +606,25 @@ class AutoPlayer:
         elif c == "[":
             # 降低时机抖动幅度
             self.timing_jitter_ms = max(0, self.timing_jitter_ms - 3)
+            self.tracker.timing_jitter_ms = self.timing_jitter_ms
             logger.info(f"时机抖动: {self.timing_jitter_ms}ms"
                         f"{' (已禁用)' if self.timing_jitter_ms == 0 else ''}")
             return True
         elif c == "]":
             # 增加时机抖动幅度
             self.timing_jitter_ms = min(100, self.timing_jitter_ms + 3)
+            self.tracker.timing_jitter_ms = self.timing_jitter_ms
             logger.info(f"时机抖动: {self.timing_jitter_ms}ms")
             # 启用随机化 (如果之前禁用了)
             if not self.rand_enabled:
                 self.rand_enabled = True
                 logger.info("点击随机化已自动启用")
+            self.tracker.rand_enabled = self.rand_enabled
             return True
         elif c == "\\":
             # 切换随机化启用/禁用
             self.rand_enabled = not self.rand_enabled
+            self.tracker.rand_enabled = self.rand_enabled
             status = "已启用" if self.rand_enabled else "已禁用"
             logger.info(f"点击随机化: {status}")
             return True
@@ -1441,6 +1445,18 @@ class BatchPlayer:
                            f"用时: {game_time:.1f}s  "
                            f"点: {song_stats.get('taps', 0)}  "
                            f"划: {song_stats.get('flicks', 0)}")
+
+                # 每 5 首歌重新测量 ADB 延迟, 自适应优化
+                if self._batch_stats["songs_played"] % 5 == 0:
+                    try:
+                        latency = self.player.adb.measure_latency(samples=2)
+                        total = latency.get("total_avg_ms", 0)
+                        if total > 0:
+                            self.player.tracker.set_latency(total)
+                            self.player.latency_comp = int(total)
+                            logger.info(f"⚡ ADB 延迟自适应: {total:.0f}ms (已更新)")
+                    except Exception:
+                        pass
             else:
                 self._batch_stats["songs_failed"] += 1
                 logger.warning(f"⚠️  第 {song_num} 首 异常结束")
@@ -1489,8 +1505,49 @@ class BatchPlayer:
         return False
 
     def _pick_and_apply_mode(self) -> None:
-        """从权重池中随机选择一个打歌模式, 应用到 player。"""
-        chosen = random.choice(self._mode_pool)
+        """从权重池中随机选择一个打歌模式, 应用到 player。
+           如果历史记录中有失败记录, 动态降级模式以提高稳定性。"""
+        pool = list(self._mode_pool)
+
+        # 动态调整: 读取最近记录, 降低容易出问题的模式的权重
+        try:
+            hist_file = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), ".song_history.json"
+            )
+            if os.path.exists(hist_file):
+                with open(hist_file) as f:
+                    history = json.load(f)
+                # 只看最近 10 首
+                recent = history[-10:] if len(history) > 10 else history
+                # 统计每个模式的失败率 (帧数过少的歌曲视为异常)
+                mode_failures = {}
+                mode_total = {}
+                for s in recent:
+                    m = s.get("mode", "FC")
+                    mode_total[m] = mode_total.get(m, 0) + 1
+                    frames = s.get("frames", 0)
+                    duration = s.get("duration", 0)
+                    # 少于 200 帧或小于 10 秒 => 异常歌曲
+                    if frames < 200 or duration < 10:
+                        mode_failures[m] = mode_failures.get(m, 0) + 1
+
+                for m, failures in mode_failures.items():
+                    total = mode_total.get(m, 1)
+                    fail_rate = failures / total
+                    if fail_rate > 0.3:
+                        # 失败率超过 30%, 降低该模式的权重 (移除一半的该模式实例)
+                        remove_count = pool.count(m) // 2
+                        for _ in range(remove_count):
+                            if m in pool:
+                                pool.remove(m)
+                        logger.debug(f"策略: {m} 失败率 {fail_rate:.0%}, 权重已降低")
+                # 确保池子不为空
+                if not pool:
+                    pool = ["FC"]
+        except Exception:
+            pass
+
+        chosen = random.choice(pool)
         self.player.set_mode(chosen)
 
     def _play_one_song(self) -> Optional[dict]:
@@ -1518,7 +1575,9 @@ class BatchPlayer:
         song_start = time.time()
         failures = 0
 
+        loop_count = 0
         while self.player._running:
+            loop_count += 1
             # 单曲超时
             if time.time() - song_start > self.song_timeout:
                 logger.warning(f"⏰ 单曲超时 ({self.song_timeout}s), 跳过")
@@ -1529,6 +1588,10 @@ class BatchPlayer:
             if self.player._paused:
                 time.sleep(0.1)
                 continue
+
+            # 热键检查 (每 10 帧)
+            if loop_count % 10 == 0:
+                self.player._check_keyboard()
 
             # 截图
             frame = self.player.adb.screencap()
@@ -1590,13 +1653,19 @@ class BatchPlayer:
 
         # 收集统计
         self.player._release_all()
-        return {
+        song_stats = {
             "taps": self.player._stats["taps"],
             "flicks": self.player._stats["flicks"],
             "holds": self.player._stats["holds"],
             "frames": self.player._stats["frames"],
             "predicted": self.player._stats.get("predicted_triggers", 0),
+            "mode": self.player.mode_name,
+            "timestamp": time.time(),
+            "duration": time.time() - song_start,
         }
+        # 写入历史记录
+        self._append_song_history(song_stats)
+        return song_stats
 
     def _handle_result_screen(self):
         """
@@ -1682,6 +1751,25 @@ class BatchPlayer:
                         if self._batch_stats['total_game_time'] > 0 else "")
         logger.info("─" * 40)
 
+    def _append_song_history(self, song: dict):
+        """将一首歌的记录追加到历史文件。"""
+        hist_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), ".song_history.json"
+        )
+        try:
+            history = []
+            if os.path.exists(hist_file):
+                with open(hist_file, "r") as f:
+                    history = json.load(f)
+            history.append(song)
+            # 只保留最近 200 条
+            if len(history) > 200:
+                history = history[-200:]
+            with open(hist_file, "w") as f:
+                json.dump(history, f, indent=2)
+        except Exception:
+            pass
+
     def _write_stats(self):
         """写入冲榜状态供 Web 仪表盘读取。"""
         stats_file = os.path.join(
@@ -1691,6 +1779,12 @@ class BatchPlayer:
         elapsed = now - self._batch_stats.get("start_time", now)
         played = self._batch_stats.get("songs_played", 0)
 
+        # 实时 FPS 计算: 当前歌曲的实际帧率
+        fps = self.player._stats.get("fps", 0)
+        if fps <= 0 and self.player._stats.get("frames", 0) > 0:
+            elapsed_now = now - self.player._stats.get("start_time", now)
+            fps = self.player._stats["frames"] / elapsed_now if elapsed_now > 0 else 0
+
         stats = {
             "running": self._running,
             "songs_played": played,
@@ -1699,14 +1793,14 @@ class BatchPlayer:
             "elapsed_seconds": round(elapsed),
             "avg_song_time": round(self._batch_stats["total_game_time"] / played, 1)
                 if played > 0 else 0,
-            "fps": round(self.player._stats.get("fps", 0), 1),
+            "fps": round(fps, 1),
             "latency_comp_ms": self.player.latency_comp,
             "total_taps": self._batch_stats.get("total_taps", 0),
             "total_flicks": self._batch_stats.get("total_flicks", 0),
             "total_holds": self._batch_stats.get("total_holds", 0),
             "total_frames": self._batch_stats.get("total_frames", 0),
             "log": self._get_recent_log(),
-            "version": "4.1.0",
+            "version": "4.3.0",
         }
         try:
             with open(stats_file, "w") as f:

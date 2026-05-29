@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [4.4.0] - 2026-05-29
+
+- **统计数据系统**: 每首歌自动记录历史 (模式/时间/点击量), Web 仪表盘统计页面
+- **策略优化**: 动态模式权重, 基于历史表现自动调整 AP/FC/LIVE 比例
+- **反应速度**: ADB 延迟自适应, 每 5 首歌重新测量延迟自动更新
+- **Bug 修复**:
+  - 修复所有硬编码版本号 (HTML 侧栏/关于页/API → 动态从 VERSION 文件加载)
+  - 修复 Web 仪表盘缺失 `/api/action?action=team` 端点
+  - 修复批量打歌模式下热键不生效
+  - 修复 AutoPlayer ↔ NoteTracker 随机化状态不同步
+  - 修复 FPS 在仪表盘显示过期值的问题
+- **GUI 增强**: 截图页面自动刷新开关、动态版本号同步、新统计页面
+
 ## [4.3.0] - 2026-05-29
 
 - **打歌模式系统**: AP (All Perfect) / FC (Full Combo) / LIVE (通关保底) 三种预设

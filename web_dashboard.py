@@ -32,6 +32,16 @@ _log_lock = threading.Lock()
 _cfg = {}
 
 
+def _get_version() -> str:
+    """从 VERSION 文件读取版本号。"""
+    vp = os.path.join(ROOT_DIR, "VERSION")
+    try:
+        with open(vp) as f:
+            return f.read().strip()
+    except Exception:
+        return "4.3.0"
+
+
 def log(msg: str):
     ts = time.strftime("%H:%M:%S")
     with _log_lock:
@@ -189,6 +199,21 @@ def cmd_calibrate():
     threading.Thread(target=_do_calibrate, daemon=True).start()
 
 
+def _apply_team(tb):
+    """在后台线程中应用编队。"""
+    try:
+        from adb_controller import ADBController
+        adb = ADBController(_cfg)
+        if adb.wait_for_device(timeout=10):
+            tb.navigate_to_team_screen(adb)
+            tb.apply(adb)
+            log(f"✅ 编队已应用: {tb.team.name}")
+        else:
+            log("❌ 编队失败: 设备未连接")
+    except Exception as e:
+        log(f"❌ 编队异常: {e}")
+
+
 def _do_calibrate():
     try:
         from auto_play import Calibrator
@@ -247,6 +272,14 @@ class Handler(BaseHTTPRequestHandler):
                     cmd_pause()
                 elif a == "calibrate":
                     cmd_calibrate()
+                elif a == "team":
+                    team_name = q.get("team", "")
+                    if team_name:
+                        from team_builder import TeamBuilder
+                        tb = TeamBuilder(_cfg, team_name=team_name)
+                        if tb.team:
+                            log(f"👥 应用编队: {tb.team.name}")
+                            _apply_team(tb)
                 elif a == "reconnect":
                     threading.Thread(target=_init_backends, daemon=True).start()
                 return self._json({"ok": True})
@@ -254,6 +287,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(_api_versions())
             if path == "/api/auto-speed":
                 return self._json(_api_auto_speed())
+            if path == "/api/history":
+                return self._json(_api_history())
+            if path == "/api/song-stats":
+                return self._json(_api_song_stats())
             self.send_error(404)
         except Exception as e:
             self._json({"error": str(e)})
@@ -294,7 +331,7 @@ def _api_stats():
     d = {"running": _app_running, "paused": _app_paused,
          "songs_played": 0, "target": 0, "elapsed_seconds": 0,
          "fps": 0, "total_taps": 0, "total_flicks": 0, "total_holds": 0,
-         "version": "4.1.0", "adb": _adb and _adb.is_connected() or False}
+         "version": _get_version(), "adb": _adb and _adb.is_connected() or False}
     try:
         if os.path.exists(STATS_FILE):
             with open(STATS_FILE) as f:
@@ -369,6 +406,52 @@ def _api_status():
         except Exception:
             pass
     return s
+
+
+def _api_history():
+    """返回歌曲历史记录。"""
+    hist_file = os.path.join(ROOT_DIR, ".song_history.json")
+    try:
+        if os.path.exists(hist_file):
+            with open(hist_file) as f:
+                history = json.load(f)
+            return {"history": history[-50:], "total": len(history)}
+    except Exception:
+        pass
+    return {"history": [], "total": 0}
+
+
+def _api_song_stats():
+    """返回汇总统计。"""
+    hist_file = os.path.join(ROOT_DIR, ".song_history.json")
+    try:
+        if os.path.exists(hist_file):
+            with open(hist_file) as f:
+                history = json.load(f)
+            if not history:
+                return {}
+            total = len(history)
+            recent = history[-30:] if len(history) > 30 else history
+            avg_duration = sum(s.get("duration", 0) for s in recent) / len(recent)
+            avg_taps = sum(s.get("taps", 0) for s in recent) / len(recent)
+            mode_counts = {}
+            for s in recent:
+                m = s.get("mode", "?")
+                mode_counts[m] = mode_counts.get(m, 0) + 1
+            return {
+                "total_songs": total,
+                "recent_count": len(recent),
+                "avg_duration": round(avg_duration, 1),
+                "avg_taps": round(avg_taps, 1),
+                "mode_distribution": mode_counts,
+                "total_taps": sum(s.get("taps", 0) for s in history),
+                "total_flicks": sum(s.get("flicks", 0) for s in history),
+                "total_holds": sum(s.get("holds", 0) for s in history),
+                "total_duration": round(sum(s.get("duration", 0) for s in history) / 60, 1),
+            }
+    except Exception:
+        pass
+    return {}
 
 
 def _api_auto_speed():
@@ -459,10 +542,11 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 </head>
 <body>
 <div class="sb">
-<div class="sbh"><h1>🎵 PJSK</h1><div class="v">v4.1.0 · 原生窗口</div></div>
+<div class="sbh"><h1>🎵 PJSK</h1><div class="v" id="sidebar-version">v4.3.0</div></div>
 <div class="nav a" onclick="sp('dash')"><span>📊</span><span>仪表盘</span></div>
 <div class="nav" onclick="sp('phone')"><span>📸</span><span>手机画面</span></div>
 <div class="nav" onclick="sp('scripts')"><span>🎮</span><span>歌单&编队</span></div>
+<div class="nav" onclick="sp('stats')"><span>📈</span><span>统计</span></div>
 <div class="nav" onclick="sp('cfg')"><span>⚙️</span><span>设置</span></div>
 <div class="nav" onclick="sp('about')"><span>ℹ️</span><span>关于</span></div>
 </div>
@@ -596,7 +680,13 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 </div>
 
 <div id="p-phone" class="pg">
-<div class="cx"><button class="btn btn-s btn-p" onclick="ss()">📸 刷新</button><span class="si" id="ss-info"></span></div>
+<div class="cx">
+  <button class="btn btn-s btn-p" onclick="ss()">📸 刷新</button>
+  <label style="font-size:12px;color:var(--td);display:flex;align-items:center;gap:4px">
+    <input type="checkbox" id="ss-auto" onchange="toggleAutoSS()"> 自动刷新
+  </label>
+  <span class="si" id="ss-info"></span>
+</div>
 <div class="card" style="text-align:center"><img id="ss-img" class="sc" src="" alt="手机画面"></div>
 </div>
 
@@ -622,10 +712,24 @@ textarea{width:100%;min-height:360px;background:#010409;border:1px solid var(--b
 <button class="btn btn-s" onclick="loadCfg()">🔄 刷新</button></div></div>
 </div>
 
+<div id="p-stats" class="pg">
+<div class="card"><div class="ct">冲榜总览</div>
+<div class="sg">
+  <div class="st"><div class="sv" id="st-total">-</div><div class="sl">总曲数</div></div>
+  <div class="st"><div class="sv" id="st-duration">-</div><div class="sl">总时间 (分钟)</div></div>
+  <div class="st"><div class="sv" id="st-avg-dur">-</div><div class="sl">平均时长 (s)</div></div>
+  <div class="st"><div class="sv" id="st-avg-tap">-</div><div class="sl">平均点击</div></div>
+</div></div>
+<div class="card"><div class="ct">模式分布</div><div class="sg" id="mode-dist"></div></div>
+<div class="card"><div class="ct">最近记录 (最近 50 首)</div>
+<div class="lb" id="history-list" style="max-height:300px"><div class="ll">暂无数据</div></div></div>
+<div class="cx"><button class="btn btn-s btn-d" onclick="clearHistory()">🗑️ 清空历史</button></div>
+</div>
+
 <div id="p-about" class="pg">
 <div class="card" style="text-align:center">
 <h2 style="color:var(--ac);margin-bottom:4px">🎵 PJSK Auto Player</h2>
-<p style="color:var(--td);font-size:14px">v4.1.0</p>
+<p style="color:var(--td);font-size:14px" id="about-version">v4.3.0</p>
 <p style="color:var(--td);font-size:13px;margin:8px 0">基于 ADB+OpenCV 的 Project Sekai 自动打歌<br>原生桌面窗口 · 预测引擎 · Pipeline · 冲榜 · 反封号</p>
 <p style="font-size:13px"><a href="https://github.com/WeatherWind/pjsk-auto-player" target="_blank" style="color:var(--ac)">GitHub</a></p>
 <div id="vt" style="margin-top:16px;text-align:left"></div></div>
@@ -638,7 +742,7 @@ async function g(u){return(await fetch(u)).json()}
 async function act(a){await fetch('/api/action?action='+a)}
 async function setup(){document.getElementById('btn-setup').textContent='连接中...';await act('reconnect');setTimeout(poll,1000)}
 async function poll(){try{
-let d=await g('/api/status');
+let d=await g('/api/status');syncVersion();
 let e=document.getElementById('st-bdg');let r=d.adb;
 e.innerHTML=r?'<span class="dot dg"></span>已连接':'<span class="dot dr"></span>未连接';e.className='bdg '+(r?'bdg-g':'bdg-r');
 document.getElementById('dev-info').textContent=r?'📱 '+d.screen+' '+((d.scrcpy?'📡scrcpy':'')+(d.minitouch?' 🤏minitouch':'')):'';
@@ -653,6 +757,22 @@ lb.innerHTML=l.log.split('\n').filter(x=>x).map(x=>'<div class="ll">'+esc(x)+'</
 lb.scrollTop=lb.scrollHeight}
 }catch(e){}
 setTimeout(poll,2000)}
+
+// ── 版本同步 ──
+async function syncVersion(){
+  try{let s=await g('/api/stats');let v=s.version||'4.3.0';
+  document.getElementById('sidebar-version').textContent='v'+v;
+  let av=document.getElementById('about-version');
+  if(av)av.textContent='v'+v}catch(e){}
+}
+
+// ── 自动截图 ──
+var _ssTimer=null;
+function toggleAutoSS(){
+  if(document.getElementById('ss-auto').checked){
+    _ssTimer=setInterval(ss,3000)
+  }else{if(_ssTimer){clearInterval(_ssTimer);_ssTimer=null}}
+}
 
 // ── Task runners ──
 var _appRunning=false;
@@ -775,6 +895,44 @@ function dismissTour(){
   document.getElementById('tour-overlay').remove();
   localStorage.setItem('pjsk_tour_done','1');
 }
+
+// ── 统计页面 ──
+async function loadStats(){
+  try{
+    let d=await g('/api/song-stats');
+    if(!d.total_songs)return;
+    document.getElementById('st-total').textContent=d.total_songs;
+    document.getElementById('st-duration').textContent=d.total_duration||0;
+    document.getElementById('st-avg-dur').textContent=d.avg_duration||0;
+    document.getElementById('st-avg-tap').textContent=d.avg_taps||0;
+    // 模式分布
+    let md=document.getElementById('mode-dist');md.innerHTML='';
+    let colors={'AP':'#3fb950','FC':'#58a6ff','LIVE':'#d29922'};
+    for(let[m,c]of Object.entries(d.mode_distribution||{})){
+      md.innerHTML+='<div class="st"><div class="sv" style="color:'+(colors[m]||'var(--tx)')+'">'+c+'</div><div class="sl">'+m+'</div></div>'
+    }
+    // 历史列表
+    let hist=await g('/api/history');
+    let hl=document.getElementById('history-list');
+    if(hist.history&&hist.history.length){
+      hl.innerHTML=hist.history.slice().reverse().map(s=>{
+        let t=new Date((s.timestamp||0)*1000);
+        return '<div class="ll" style="border-bottom:1px solid var(--bd);padding:4px 0">'+
+          '<span class="lt">'+t.toLocaleTimeString()+'</span>'+
+          ' '+s.mode+' 点'+s.taps+' 划'+s.flicks+' 按'+s.holds+
+          ' <span style="color:var(--td)">'+(s.duration?Math.round(s.duration)+'s':'')+'</span></div>'
+      }).join('')
+    }
+  }catch(e){}
+}
+async function clearHistory(){
+  if(!confirm('确定清空所有历史记录？'))return;
+  await fetch('/api/action?action=clear-history');
+  loadStats()
+}
+// 页面切换时加载统计
+var _origSp=sp;
+sp=function(n){_origSp(n);if(n==='stats')loadStats()};
 
 loadCombos();loadTeams();loadCfg();loadVT();setTimeout(poll,500)
 </script>
