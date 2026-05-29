@@ -9,8 +9,12 @@
 
 | 版本 | 特性 |
 |------|------|
-| **v4.5.0** 🆕 | ⚖️ 法律合规: TERMS.md + 首次确认 + CI Release 自动用 CHANGELOG 生成发布说明 |
-| | ⚡ 延迟优化: scrcpy 自动检测+60FPS、向量化检测 5-10x、帧跳过、minitouch 启动加速 5x |
+| **v4.8.1** | 🔧 Bugfix: hasattr→布尔标志、minitouch 断连恢复、scrcpy 帧丢失自动重启、PID 3-sigma 离群值过滤 |
+| **v4.8.0** | 🎯 自适应延迟 PID 控制器: 每首歌自动微调补偿, kp=0.3/ki=0.05/kd=0.1, 自动收敛 |
+| **v4.7.0** | 📦 Minitouch 预编译二进制: 下载脚本 + CI 打包 + build.spec 自动触发 |
+| **v4.6.0** | 🎵 谱面缓存: 跨歌曲保留 note 滚动速度, 跳过 ~50ms 校准期 |
+| **v4.5.0** | ⚖️ 法律合规: TERMS.md + 首次确认 + CI Release 用 CHANGELOG 生成说明 |
+| | ⚡ 延迟优化: scrcpy 自动检测+60FPS、向量化检测 5-10x、帧跳过、启动加速 5x |
 | **v4.4.0** | 打歌模式 (AP/FC/LIVE) + 模式浮动 + 点击随机化反封号 |
 | **v4.0.0** | 纯 Web 操控 + scrcpy/minitouch 自动启用 + 原生窗口 (PyWebView) |
 | **v3.9.0** | 开箱即用: ADB 自动下载 + 一键启动脚本 |
@@ -26,9 +30,13 @@
 | 特性 | 说明 |
 |------|------|
 | **🎯 预测引擎** | 提前检测判定线上方的 note → 追踪滚动速度 → 计算到达时间 → 准时触发。补偿 ADB 的 100-300ms 延迟, 让纯反应式变主动式 |
-| **🎲 点击随机化** 🆕 | 模拟人类操作, 避免被封号: 时机抖动 ±15ms, 坐标偏移 ±5px, 随机漏键 0.1%, 长按时长抖动, 结算点击间隔随机化 |
-| **🎮 打歌模式** 🆕 | 三种模式: AP (All Perfect), FC (Full Combo), LIVE (通关保底)。热键 M 运行时切换, 冲榜时自动浮动 (70% FC + 25% AP + 5% LIVE) |
-| **🤏 Minitouch 后端** | 可选, 推送 minitouch 到手机后触摸延迟从 ~50ms 降到 <5ms |
+| **⚡ 自适应 PID 延迟** 🆕 | 每首歌结束后基于实际触发提前量自动微调延迟补偿, kp=0.3/ki=0.05/kd=0.1, 逐步收敛到最佳值 |
+| **🎵 谱面缓存** 🆕 | 跨歌曲保留 note 滚动速度, 同一首歌反复刷时直接恢复速度估计, 跳过 ~50ms 校准期 |
+| **📡 scrcpy 自动检测** 🆕 | 自动检测 scrcpy 安装并优先使用 60FPS 视频流, 未安装则无缝降级 ADB |
+| **⚡ 向量化检测** 🆕 | OpenCV 检测全部向量化: note 检测 5-10x、flick 方向检测 20x+ |
+| **🎲 点击随机化** | 模拟人类操作, 避免被封号: 时机抖动 ±15ms, 坐标偏移 ±5px, 随机漏键 0.1%, 长按时长抖动, 结算点击间隔随机化 |
+| **🎮 打歌模式** | 三种模式: AP (All Perfect), FC (Full Combo), LIVE (通关保底)。热键 M 运行时切换, 冲榜时自动浮动 (70% FC + 25% AP + 5% LIVE) |
+| **🤏 Minitouch 后端** | 预编译二进制, 推送 minitouch 到手机后触摸延迟从 ~50ms 降到 <5ms |
 | **🏭 Pipeline 引擎** | MAA 启发式任务流水线, 游戏状态机用 JSON 配置, 支持模板匹配 + 重试策略 + 子任务 |
 | **♾️ 冲榜模式** | 自动连续打歌: 检测结算画面 → 点击跳过 → 返回选歌 → 下一首。支持 `--infinite` |
 | **⌨️ 热键控制** | 运行时无需切窗口: P=暂停, Q=退出, +/-=微调延迟, </>=调阈值 |
@@ -143,9 +151,10 @@
 | 数据线 | USB 数据线 (建议原装线) |
 | 游戏 | Project Sekai (プロジェクトセカイ) 已安装 |
 
-### 可选: scrcpy (大幅提升帧率)
+### scrcpy (自动检测, 无需配置)
 
-默认使用 ADB screencap (5-15 FPS)。安装 scrcpy 后可切换到 30-60 FPS:
+默认会自动检测 scrcpy 是否安装, 有则用 60FPS 视频流, 无则降级 ADB screencap。
+如需手动安装 scrcpy:
 
 ```bash
 # macOS
@@ -389,8 +398,20 @@ python main.py calibrate --profile phone2    # 保存到档案
 python main.py test                          # 测试连接
 python main.py test --loop                   # 持续测试
 
+python main.py minitouch-setup               # 下载 minitouch 二进制
+
 python main.py profiles                      # 列出配置档案
+python main.py combos                        # 列出歌单
+python main.py teams                         # 列出编队
+
+python main.py web                           # 启动 Web 仪表盘
+python main.py web --port 9090               # 指定端口
+
+python main.py setup                         # 交互式设置向导
+python main.py setup --auto                  # 自动设置
+
 python main.py -c config2.yaml start         # 指定配置文件
+python main.py --version                     # 显示版本号
 ```
 
 ## 📦 打包成可执行文件
@@ -501,6 +522,28 @@ pjsk-auto-player/
 
 ## 进阶技巧
 
+### Advanced: 自适应延迟 PID
+
+在 `config.yaml` 的 `timing` 段:
+
+```yaml
+timing:
+  adaptive_latency:
+    enabled: true        # PID 自适应开关
+    kp: 0.3              # 比例增益 (快速响应)
+    ki: 0.05             # 积分增益 (消除稳态误差)
+    kd: 0.1              # 微分增益 (抑制超调)
+    target_advance_ms: 15  # 目标提前量 (ms)
+    min_samples: 50      # 最少样本数
+```
+
+### Advanced: 谱面缓存
+
+```yaml
+prediction:
+  velocity_cache: true   # 跨歌曲保留 note 速度
+```
+
 ### 提高 AP 成功率
 
 1. **校准**: 先运行 `calibrate` 获取准确的判定线和轨道位置
@@ -580,15 +623,18 @@ python main.py calibrate --profile phone2
 python main.py auto --infinite --profile phone1
 ```
 
-### scrcpy 高帧率模式
+### scrcpy 高帧率模式 (自动检测)
+
+默认 `screencap_method: auto` 会自动检测 scrcpy。如需强制指定:
 
 ```yaml
 # config.yaml
 adb:
-  screencap_method: scrcpy
+  screencap_method: scrcpy   # auto=自动(推荐), exec-out=ADB, scrcpy=强制
 scrcpy:
   max_fps: 60
   scale: 0.5
+  frame_skip: true           # 只处理最新帧, 不积压
 ```
 
 ### Pipeline 弹窗处理
@@ -629,11 +675,11 @@ scrcpy:
 
 ## 局限性
 
-- **ADB 延迟**: ADB 触摸延迟 ~50ms 依然存在 (建议使用 minitouch <5ms)
-- **预测引擎**: 对极端高速谱面 (32分音符连打) 需要稳定 60FPS 输入
+- **ADB 延迟**: ADB 触摸延迟 ~50ms 依然存在 (minitouch <5ms 可解决, 使用 `python main.py minitouch-setup`)
+- **PID 自适应**: 需 ≥50 个样本/首歌才能稳定调整, 前几首歌沿用初始补偿值
+- **谱面缓存**: 不同歌曲速度差异大时, 缓存 velocity 需要约 2 帧重新收敛
 - **Flick 方向**: 方向检测依赖于画面中箭头特效的可识别性, 极少数谱面可能不准
 - **Hold 处理**: 通过短按压模拟长按, 不是真正的持续按住
-- **模板匹配**: 需要预先采集模板图片, 不同分辨率可能需要不同模板
 
 ## 未来改进方向 (Roadmap)
 
