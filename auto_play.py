@@ -93,6 +93,18 @@ class NoteTracker:
         # 测量到的 ADB 延迟 (ms)
         self._measured_latency_ms = 0
 
+        # ═══ v4.8.0: 自适应延迟 PID 控制器 ═══
+        pid_cfg = config.get("timing", {}).get("adaptive_latency", {})
+        self._pid_enabled = pid_cfg.get("enabled", True)
+        self._pid_kp = pid_cfg.get("kp", 0.3)    # 比例增益
+        self._pid_ki = pid_cfg.get("ki", 0.05)   # 积分增益
+        self._pid_kd = pid_cfg.get("kd", 0.1)    # 微分增益
+        self._pid_target = pid_cfg.get("target_advance_ms", 15)  # 目标提前量 (ms)
+        self._pid_error_sum = 0.0
+        self._pid_last_error = 0.0
+        self._pid_samples: list[float] = []       # 本次歌曲的提前量样本
+        self._pid_min_samples = pid_cfg.get("min_samples", 50)  # 最少样本数
+
         # 追踪状态: lane -> { positions: [(y, t), ...], velocity: float, fired: bool }
         self._tracks: dict[int, dict] = {}
         # 缓存 lane X 坐标 (避免每次 _lane_to_x 重算)
@@ -214,6 +226,10 @@ class NoteTracker:
                     "y": self.judgment_y,
                     "flick_direction": "",
                 })
+                # ═══ v4.8.0: PID 采样 — 记录实际提前量 ═══
+                if self._pid_enabled:
+                    actual_advance = distance_to_judgment / velocity * 1000  # ms
+                    self._pid_samples.append(actual_advance)
 
         # 清理: 如果 note 已到达判定线 (被 detected_notes 捕获), 或轨迹过期
         detected_lanes = {n.lane for n in detected_notes}
@@ -259,10 +275,45 @@ class NoteTracker:
 
     def get_stats(self) -> dict:
         """获取追踪统计。"""
-        return {
+        stats = {
             "tracked_notes": len(self._tracks),
             "measured_latency_ms": self._measured_latency_ms,
         }
+        if self._pid_enabled and self._pid_samples:
+            avg_advance = sum(self._pid_samples) / len(self._pid_samples)
+            stats["pid_avg_advance_ms"] = round(avg_advance, 1)
+            stats["pid_samples"] = len(self._pid_samples)
+        return stats
+
+    def compute_pid_adjustment(self) -> float:
+        """
+        基于本次歌曲的 PID 样本计算延迟补偿调整值 (ms)。
+        正值 = 增加补偿 (提前更多), 负值 = 减少补偿。
+
+        在每首歌结束后调用, 异步应用于 _measured_latency_ms。
+        """
+        if not self._pid_enabled or len(self._pid_samples) < self._pid_min_samples:
+            self._pid_samples.clear()
+            return 0.0
+
+        # 平均实际提前量
+        avg_advance = sum(self._pid_samples) / len(self._pid_samples)
+        self._pid_samples.clear()
+
+        # PID 误差: 实际提前量 - 目标提前量
+        error = avg_advance - self._pid_target  # 正 = 提前太多
+        self._pid_error_sum += error
+        # 防积分饱和
+        self._pid_error_sum = max(-100, min(100, self._pid_error_sum))
+        derivative = error - self._pid_last_error
+        self._pid_last_error = error
+
+        adjustment = (self._pid_kp * error
+                      + self._pid_ki * self._pid_error_sum
+                      + self._pid_kd * derivative)
+        # 单次调整上限
+        adjustment = max(-20, min(20, adjustment))
+        return round(adjustment, 1)
 
 
 class AutoPlayer:
@@ -389,6 +440,15 @@ class AutoPlayer:
         self._running = False
         self._paused = False
         self._release_all()
+
+        # ═══ v4.8.0: 歌曲结束时运行 PID 调整 ═══
+        if self.use_prediction:
+            adjustment = self.tracker.compute_pid_adjustment()
+            if abs(adjustment) >= 1.0:
+                self.latency_comp = max(0, self.latency_comp + adjustment)
+                self.tracker.set_latency(self.latency_comp)
+                logger.info(f"PID 自适应延迟: 调整 {adjustment:+.1f}ms → 总补偿 {self.latency_comp:.0f}ms")
+
         self.analyzer.close()
         self.adb.close_scrcpy()
         self.adb._cleanup_minitouch()
