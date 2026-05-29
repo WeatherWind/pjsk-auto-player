@@ -5,6 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.2.0] - 2026-05-29
+
+### 🚀 屏幕捕获提速
+
+- **Raw ADB 截屏**: `adb exec-out screencap` 无 `-p` 参数，直接获取原始 RGBA 格式，比 PNG 快 2-3x
+- **异步截屏**: producer-consumer 模式，后台线程持续截屏，主线程零延迟取帧
+- **智能降级**: `screencap()` 自动选最快可用后端：scrcpy → raw ADB → PNG ADB 逐级降级
+
+### ⚡ 触摸操作提速
+
+- **批量触摸**: `queue_tap()` + `flush_touch_batch()` — 一帧内所有触摸合并为一次 `adb shell` 调用
+- **adb 进程开销减少 3-10x**: `_process_frame()` 帧结束时统一发送，不再逐次启动 adb
+- **`tap_batch()`**: 支持一次性发送多个 tap 坐标
+
+### 🐛 Bug 修复
+
+- **scrcpy 帧率减半 BUG**: `frame_skip % 2 == 0` 导致隔帧返回 None，已修复
+- **scrcpy PPM 解析重写**: `splitlines()` 替代 `find()` 多次切片，增加容错
+
+### 📝 配置更新
+
+- `screencap_method` 新增 `'raw'` 选项
+- 新增 `async_capture: true` (默认开启异步截屏)
+
 ## [5.1.0] - 2026-05-29
 
 ### 📱 PWA 手机控制面板 + 🌓 双主题 + 🧪 单元测试
