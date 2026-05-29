@@ -2,40 +2,41 @@
 
 > 基于 ADB + OpenCV 的 Project Sekai (プロジェクトセカイ) 自动打歌工具。
 > 吸收 MAA (MaaAssistantArknights) + ALAS (AzurLaneAutoScript) + MaaFramework 设计精华。
-> 插上手机 → 运行 → 自动打歌，零配置一站式体验。
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速开始 — 开箱即用
+
+### 方式 1：双击启动 (推荐)
+
+| 系统 | 操作 |
+|------|------|
+| **macOS** | 双击 `PJSK Auto Player.command` |
+| **Windows** | 双击 `run.bat` |
+| **Linux** | 双击 `run.sh` 或终端运行 `./run.sh` |
+
+首次运行会自动安装依赖并打开设置向导。之后每次双击直接启动桌面控制面板。
+
+### 方式 2：命令行
 
 ```bash
-# 一键设置向导
-python main.py setup
-
-# 开始打歌
-python main.py start
-
-# 冲榜模式（自动无限循环）
-python main.py auto
-
-# Web 控制面板
-python main.py web
-
-# 后台守护进程
-python main.py daemon
+python main.py              # 🖥️ 桌面模式 — 自动打开浏览器控制面板
+python main.py start        # 直接打歌
+python main.py auto         # 冲榜模式 (自动无限循环)
+python main.py setup        # 设置向导
 ```
 
 ---
 
-## ✨ 版本亮点 v4.9.0
+## ✨ 版本亮点
 
 | 版本 | 特性 |
 |------|------|
+| **v4.11.0** | 🖥️ 开箱即用: 桌面应用 + 自动打开浏览器 + 首次运行向导 + 系统托盘 |
+| **v4.10.0** | 🧬 ALAS 深度集成: cached_property/Resource/cached_property/颜色预处理/Benchmark/配置 Schema |
+| **v4.9.1** | 🔧 Bugfix: API 接口统一、自动恢复策略实现、Web↔PjskApp 集成 |
 | **v4.9.0** | 🏗️ MAA/ALAS 融合架构: Pipeline V2 + 场景多算法投票 + Web 暗色面板 + 分级异常 + 守护进程 |
-| **v4.8.1** | 🔧 Bugfix: hasattr→布尔标志、minitouch 断连恢复、scrcpy 帧丢失自动重启、PID 3-sigma 离群值过滤 |
-| **v4.8.0** | 🎯 自适应延迟 PID 控制器: 每首歌自动微调补偿, kp=0.3/ki=0.05/kd=0.1, 自动收敛 |
-| **v4.7.0** | 📦 Minitouch 预编译二进制: 下载脚本 + CI 打包 + build.spec 自动触发 |
-| **v4.6.0** | 🎵 谱面缓存: 跨歌曲保留 note 滚动速度, 跳过 ~50ms 校准期 |
+| **v4.8.0** | 🎯 自适应延迟 PID 控制器: kp=0.3/ki=0.05/kd=0.1, 每首歌自动收敛 |
 
 ---
 

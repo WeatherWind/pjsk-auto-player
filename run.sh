@@ -57,9 +57,11 @@ else
 fi
 
 echo ""
-echo "🚀 启动 Web 控制台..."
-echo "   浏览器打开 http://localhost:8080"
-echo "   手机打开 http://<电脑IP>:8080"
+echo "🚀 正在启动桌面应用..."
+echo "   控制面板将在浏览器中自动打开"
+echo "   如果没有自动打开，请访问 http://localhost:8080"
+echo ""
+echo "   手机访问: http://<电脑IP>:8080"
 echo ""
 
 $PYTHON main.py
