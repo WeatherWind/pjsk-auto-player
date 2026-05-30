@@ -63,6 +63,59 @@ def cmd_calibrate(args):
     print("✅ 校准完成！配置已自动更新。")
 
 
+def cmd_read_settings(args):
+    """读取游戏内设置参数 (タイミング調整 + ノーツ速度)。"""
+    from app import PjskApp
+    from game_settings import GameSettingsReader, GameServer, GameSettings
+
+    app = PjskApp(profile=args.profile)
+    app.initialize()
+
+    try:
+        server = GameServer(args.server)
+    except ValueError:
+        server = GameServer.AUTO
+
+    print(f"🎮 读取游戏内设置 (服务器: {server.value})...")
+    print("   导航到 LIVE 设置页面...")
+
+    reader = GameSettingsReader(app.controller, app.config, server=server)
+    result = reader.read_and_apply(navigate=True)
+
+    if result is not None:
+        print()
+        print("=" * 50)
+        print("📊 游戏内设置读取结果")
+        print("=" * 50)
+        print(f"  服务器:      {result.server or '自动检测'}")
+        print(f"  Timing偏移: {result.game_timing_offset:+d}")
+        print(f"  音符速度:    {result.game_note_speed:.1f}")
+        print(f"  ───────────────────")
+        print(f"  延迟补偿:    {result.adjusted_latency_comp_ms:.0f} ms")
+        print(f"  预测提前量:  {result.adjusted_advance_ms:.0f} ms")
+        print(f"  速度因子:    {result.velocity_correction_factor:.3f}")
+        print(f"  置信度:      {result.confidence:.0%}")
+        if result.warnings:
+            print(f"  ⚠ 警告:")
+            for w in result.warnings:
+                print(f"    - {w}")
+        print("=" * 50)
+        print()
+        print("✅ 已自动应用到配置！")
+    else:
+        print()
+        print("❌ 读取失败。请确认:")
+        print("   1. 手机已通过 USB/WiFi 连接到 ADB")
+        print("   2. 游戏正在主菜单画面")
+        print("   3. OCR 引擎已安装: pip install easyocr")
+        print(f"   4. 服务器设置正确 (当前: {server.value})")
+        print()
+        print("💡 提示: 使用 --server 指定服务器")
+        print("   python main.py read-settings --server jp")
+        print("   python main.py read-settings --server en")
+        print("   python main.py read-settings --server auto")
+
+
 def cmd_setup(args):
     """设置向导。"""
     from wizard.setup import SetupWizard
@@ -175,6 +228,8 @@ def main():
   pjsk web               启动 Web 控制面板
   pjsk setup             设置向导
   pjsk calibrate         一键校准
+  pjsk read-settings     读取游戏内设置参数 (新!)
+  pjsk read-settings -s jp   指定日服
   pjsk status            查看状态
   pjsk stop              停止运行
   pjsk config list       列出配置档案
@@ -197,6 +252,13 @@ def main():
 
     # calibrate
     subparsers.add_parser("calibrate", help="一键校准").set_defaults(func=cmd_calibrate)
+
+    # read-settings (v5.3.0)
+    p_rs = subparsers.add_parser("read-settings", help="读取游戏内设置参数")
+    p_rs.add_argument("--server", "-s", default="auto",
+                      choices=["auto", "jp", "tw", "cn", "kr", "en"],
+                      help="服务器 (默认: auto 自动检测)")
+    p_rs.set_defaults(func=cmd_read_settings)
 
     # setup
     subparsers.add_parser("setup", help="设置向导").set_defaults(func=cmd_setup)

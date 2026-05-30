@@ -93,6 +93,25 @@
     "jitter_position": "位置扰动 ±{px}px",
     "miss_sim": "操作间隔变化 {pct}%"
   },
+  "game_settings": {
+    "reading": "正在读取游戏内设置...",
+    "success": "游戏设置读取成功",
+    "failed": "游戏设置读取失败",
+    "timing_offset": "判定调整",
+    "note_speed": "音符速度",
+    "server_detected": "检测到服务器: {server}",
+    "server_manual": "手动指定服务器: {server}",
+    "calibrated": "已校准: 延迟补偿={latency}ms 提前量={advance}ms 速度因子={factor}",
+    "navigating": "导航到游戏设置页面...",
+    "returning": "返回主菜单..."
+  },
+  "calibrate": {
+    "start": "开始校准...",
+    "complete": "校准完成！配置已自动更新。",
+    "reading_latency": "测量 ADB 延迟...",
+    "reading_settings": "读取游戏内设置...",
+    "applying": "应用校准参数..."
+  },
   "cli": {
     "help": "用法: python main.py [命令]",
     "commands": {

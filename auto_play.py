@@ -110,10 +110,29 @@ class NoteTracker:
         # 缓存 lane X 坐标 (避免每次 _lane_to_x 重算)
         self._lane_x_cache: list[int] = []
 
+        # v5.3.0: 速度校准因子 (来自游戏内设置 note_speed 读取)
+        self._velocity_correction_factor: float = 1.0
+        # v5.3.0: 手动提前量覆盖 (来自游戏内设置 calibration)
+        self._calibrated_advance_ms: Optional[float] = None
+
     def set_latency(self, latency_ms: float):
         """设置测量到的 ADB 延迟 (ms)。"""
         self._measured_latency_ms = latency_ms
         logger.info(f"预测引擎: ADB 延迟 = {latency_ms:.0f}ms")
+
+    def set_velocity_factor(self, factor: float):
+        """v5.3.0: 设置速度校准因子 (来自游戏内 note_speed)。
+
+        factor = game_note_speed / default_note_speed (10.0)
+        预测引擎在计算 velocity 时会乘以这个因子。
+        """
+        self._velocity_correction_factor = max(0.5, min(2.0, factor))
+        logger.info(f"预测引擎: 速度校准因子 = {self._velocity_correction_factor:.3f}")
+
+    def set_manual_advance(self, advance_ms: float):
+        """v5.3.0: 设置校准后的手动提前量 (来自游戏内 timing_offset 校准)。"""
+        self._calibrated_advance_ms = advance_ms
+        logger.info(f"预测引擎: 校准提前量 = {advance_ms:.0f}ms")
 
     def update(self, predicted_notes: list[NoteEvent],
                detected_notes: list[NoteEvent],
@@ -168,6 +187,9 @@ class NoteTracker:
         base_advance_ms = self._measured_latency_ms
         if self.manual_advance > 0:
             base_advance_ms = self.manual_advance
+        # v5.3.0: 使用校准后的 advance (来自游戏设置读取)
+        if self._calibrated_advance_ms is not None:
+            base_advance_ms = self._calibrated_advance_ms
 
         for lane, track in self._tracks.items():
             if track["fired"]:
@@ -181,7 +203,9 @@ class NoteTracker:
                 continue
 
             # 如果速度太小 (接近 0), 说明 note 可能停在屏幕上了
-            if abs(track["velocity"]) < 50:
+            # v5.3.0: 应用速度校准因子
+            effective_velocity = abs(track["velocity"]) * self._velocity_correction_factor
+            if effective_velocity < 50:
                 continue
 
             # ═══ 每 lane 独立时机随机化 (之前是全局一次, 现在 per-lane) ═══
@@ -209,7 +233,8 @@ class NoteTracker:
                 continue
 
             # 计算剩余时间 (秒) 和触发提前量
-            velocity = abs(track["velocity"])
+            # v5.3.0: 使用校准后的有效速度
+            velocity = abs(track["velocity"]) * self._velocity_correction_factor
             if velocity < 50:  # 太慢, 可能不准
                 continue
 
@@ -436,6 +461,9 @@ class AutoPlayer:
                 logger.warning("延迟测量失败, 使用配置值")
                 self.tracker.set_latency(self.latency_comp or 150)
 
+        # ═══ v5.3.0: 自动读取游戏内设置并校准 ═══
+        self._read_game_settings()
+
         self._running = True
         self._paused = False
         self._stats["start_time"] = time.time()
@@ -582,6 +610,105 @@ class AutoPlayer:
             self.adb.start_async_capture(target_fps=30)
 
         return True
+
+    def _read_game_settings(self) -> None:
+        """v5.3.0: 自动读取游戏内设置 (タイミング調整 + ノーツ速度) 并校准软件参数。"""
+        gs_cfg = self.cfg.get("game_settings", {})
+        if not gs_cfg.get("auto_read", True):
+            logger.info("游戏设置自动读取: 已禁用 (game_settings.auto_read=false)")
+            return
+
+        frequency = gs_cfg.get("frequency", "once")
+        last_time = gs_cfg.get("last_calibration_time", "")
+        if frequency == "once" and last_time:
+            logger.info(f"游戏设置自动读取: 已有缓存 ({last_time}), 跳过")
+            return
+
+        try:
+            from game_settings import GameSettingsReader, GameServer
+
+            server_str = gs_cfg.get("server", "auto")
+            try:
+                server = GameServer(server_str)
+            except ValueError:
+                server = GameServer.AUTO
+
+            logger.info("⏳ 正在读取游戏内设置 (タイミング調整 + ノーツ速度)...")
+
+            # 创建读取器 (传入 self.adb 作为 controller)
+            reader = GameSettingsReader(self.adb, self.cfg, server=server)
+
+            # 执行读取
+            result = reader.read_and_apply(navigate=True)
+
+            if result is not None:
+                # 更新本地引用的配置
+                self.latency_comp = result.adjusted_latency_comp_ms
+                if self.use_prediction:
+                    self.tracker.set_latency(self.latency_comp)
+                    # 应用速度校准因子
+                    if hasattr(self.tracker, 'set_velocity_factor'):
+                        self.tracker.set_velocity_factor(result.velocity_correction_factor)
+
+                logger.info(
+                    "✓ 游戏设置已应用: timing=%+d speed=%.1f → "
+                    "lat_comp=%.0fms advance=%.0fms vel_factor=%.3f",
+                    result.game_timing_offset, result.game_note_speed,
+                    result.adjusted_latency_comp_ms, result.adjusted_advance_ms,
+                    result.velocity_correction_factor,
+                )
+
+                # 更新 tracker 的 manual_advance
+                if hasattr(self.tracker, 'set_manual_advance'):
+                    self.tracker.set_manual_advance(result.adjusted_advance_ms)
+
+                # 持久化到 config.yaml
+                try:
+                    self._save_calibration_result(result)
+                except Exception as e:
+                    logger.debug("Failed to persist calibration: %s", e)
+            else:
+                logger.warning(
+                    "游戏设置读取失败 (可能不在主菜单画面)。"
+                    "将使用 config.yaml 中的现有参数。"
+                )
+
+        except ImportError as e:
+            logger.debug("Game settings module not available: %s", e)
+        except Exception as e:
+            logger.warning("游戏设置读取异常 (不影响执行): %s", e)
+
+    def _save_calibration_result(self, result) -> None:
+        """将校准结果持久化到 config.yaml。"""
+        import yaml
+        import os
+
+        config_paths = [
+            "config.yaml",
+            os.path.join(os.path.dirname(__file__), "config.yaml"),
+        ]
+
+        for path in config_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f) or {}
+
+                    if "game_settings" not in data:
+                        data["game_settings"] = {}
+                    gs = data["game_settings"]
+                    gs["last_read_timing_offset"] = result.game_timing_offset
+                    gs["last_read_note_speed"] = result.game_note_speed
+                    gs["last_calibration_time"] = result.calibration_time
+                    gs["detected_server"] = result.server
+
+                    with open(path, "w", encoding="utf-8") as f:
+                        yaml.dump(data, f, default_flow_style=False,
+                                  allow_unicode=True, sort_keys=False)
+                    logger.debug("Calibration result saved to %s", path)
+                    return
+                except Exception as e:
+                    logger.debug("Failed to save to %s: %s", path, e)
 
     def _try_reconnect(self) -> bool:
         """尝试重连 ADB 设备。"""

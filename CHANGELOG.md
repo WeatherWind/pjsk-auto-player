@@ -5,6 +5,38 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.3.0] - 2026-05-30
+
+### 🎮 游戏设置自动读取 + 多服适配
+
+- **`game_settings/` 模块**: 自动导航到游戏内 LIVE 设置页面，OCR 读取 `タイミング調整` 和 `ノーツ速度`
+- **6 服务器原生支持**: JP / TW / CN / KR / EN + 自动检测
+  - 包名检测: `detect_server()` 根据 Android 包名自动识别服务器
+  - OCR 标签检测: `detect_server_by_ocr_labels()` 根据设置页面文字二次确认
+  - 手动指定: `--server jp|tw|cn|kr|en`
+- **自动校准引擎** (`SettingsCalibrator`):
+  - `timing_offset` → `latency_comp_ms` / `advance_ms` 映射
+  - `note_speed` → `velocity_correction_factor` 速度缩放
+  - 自动写入 config.yaml 持久化
+- **预测引擎集成**:
+  - `NoteTracker.set_velocity_factor()`: 速度校准因子
+  - `NoteTracker.set_manual_advance()`: 校准提前量覆盖
+  - `AutoPlayer._read_game_settings()`: 启动时自动读取
+- **CLI 命令**: `python main.py read-settings [--server jp|tw|cn|kr|en]`
+- **Pipeline 任务**: `resource/tasks/game_settings.json` (导航→验证→读取→返回)
+
+### 🌍 多语言支持
+
+- 新增 `game_settings` / `calibrate` 翻译节 (zh_CN / en_US / ja_JP)
+- OCR 引擎按服务器语言自动配置 (EasyOCR lang 参数)
+
+### 🔧 配置更新
+
+- 新增 `game_settings` 配置节: `auto_read`, `frequency`, `server`, `auto_calibrate`
+- `config/default.yaml` 和 `config.yaml` 同步更新
+- Schema 校验新增 `game_settings` 定义
+- `_ensure_defaults()` 硬编码默认值补全
+
 ## [5.2.0] - 2026-05-29
 
 ### 🚀 屏幕捕获提速

@@ -316,6 +316,32 @@ ocr:
   read_scores: true
 
 # ============================================================
+# 游戏内设置自动读取 (v5.3.0+)
+# ============================================================
+game_settings:
+  # 是否在启动时自动读取游戏内参数 (タイミング調整 + ノーツ速度)
+  auto_read: true
+
+  # 读取频率: "once" = 每次启动读一次, "every_song" = 每首歌后重读
+  frequency: "once"
+
+  # 目标服务器: "auto" | "jp" | "tw" | "cn" | "kr" | "en"
+  server: "auto"
+
+  # 上次读取结果 (自动记录, 请勿手动修改)
+  last_read_timing_offset: 0
+  last_read_note_speed: 10.0
+  last_calibration_time: ""
+  detected_server: ""
+
+  # 校准: 是否自动将游戏参数写入软件配置
+  auto_calibrate: true
+
+  # 校准参数
+  timing_unit_ms: 1.0           # 游戏 timing 1 单位 ≈ 多少 ms
+  default_note_speed: 10.0       # 基准速度 (用于速度缩放)
+
+# ============================================================
 # 日志与调试
 # ============================================================
 debug:

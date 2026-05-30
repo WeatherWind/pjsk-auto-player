@@ -138,6 +138,18 @@ def _ensure_defaults(cfg: dict) -> dict:
             "threshold_down": ",",
             "mode_cycle": "m",
         },
+        "game_settings": {
+            "auto_read": True,
+            "frequency": "once",
+            "server": "auto",
+            "timing_unit_ms": 1.0,
+            "default_note_speed": 10.0,
+            "auto_calibrate": True,
+            "last_read_timing_offset": 0,
+            "last_read_note_speed": 10.0,
+            "last_calibration_time": "",
+            "detected_server": "",
+        },
     }
     # 递归合并
     for key, val in defaults.items():

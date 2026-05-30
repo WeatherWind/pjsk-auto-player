@@ -93,6 +93,25 @@
     "jitter_position": "Position perturbation ±{px}px",
     "miss_sim": "Interval variation {pct}%"
   },
+  "game_settings": {
+    "reading": "Reading in-game settings...",
+    "success": "Game settings read successfully",
+    "failed": "Failed to read game settings",
+    "timing_offset": "Timing Adjustment",
+    "note_speed": "Note Speed",
+    "server_detected": "Server detected: {server}",
+    "server_manual": "Server specified: {server}",
+    "calibrated": "Calibrated: latency={latency}ms advance={advance}ms velocity={factor}",
+    "navigating": "Navigating to game settings...",
+    "returning": "Returning to main menu..."
+  },
+  "calibrate": {
+    "start": "Starting calibration...",
+    "complete": "Calibration complete! Config updated.",
+    "reading_latency": "Measuring ADB latency...",
+    "reading_settings": "Reading in-game settings...",
+    "applying": "Applying calibration parameters..."
+  },
   "cli": {
     "help": "Usage: python main.py [command]",
     "commands": {

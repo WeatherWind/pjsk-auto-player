@@ -135,6 +135,17 @@ notification:
   on_error: true
 
 # ============================================================
+# 游戏内设置自动读取
+# ============================================================
+game_settings:
+  auto_read: true               # 启动时自动读取游戏参数
+  frequency: "once"             # once | every_song
+  server: "auto"                # auto | jp | tw | cn | kr | en
+  timing_unit_ms: 1.0
+  default_note_speed: 10.0
+  auto_calibrate: true
+
+# ============================================================
 # 日志
 # ============================================================
 logging:

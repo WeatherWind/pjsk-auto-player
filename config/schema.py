@@ -119,6 +119,27 @@ CONFIG_SCHEMA: dict[str, dict] = {
             "auto_open_browser": {"type": "bool", "default": False},
         },
     },
+    "game_settings": {
+        "type": "object",
+        "required": False,
+        "description": "游戏内设置自动读取",
+        "properties": {
+            "auto_read": {"type": "bool", "default": True, "description": "启动时自动读取"},
+            "frequency": {
+                "type": "str", "default": "once",
+                "choices": ["once", "every_song"],
+                "description": "读取频率",
+            },
+            "server": {
+                "type": "str", "default": "auto",
+                "choices": ["auto", "jp", "tw", "cn", "kr", "en"],
+                "description": "目标服务器",
+            },
+            "timing_unit_ms": {"type": "float", "default": 1.0, "description": "Timing 单位对应毫秒"},
+            "default_note_speed": {"type": "float", "default": 10.0, "description": "基准音符速度"},
+            "auto_calibrate": {"type": "bool", "default": True, "description": "自动校准"},
+        },
+    },
     "logging": {
         "type": "object",
         "required": False,

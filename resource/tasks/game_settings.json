@@ -1,0 +1,158 @@
+{
+  "doc": "PJSK Auto Player - 游戏设置读取流水线 (v5.3.0)",
+  "version": "5.3.0",
+
+  "============================================================": "设置页面导航",
+
+  "NavigateToMenu": {
+    "action": "DoNothing",
+    "doc": "确认在主菜单画面 (或点击返回直到到达主菜单)",
+    "next": ["OpenSettingsMenu"],
+    "failed_next": ["ForceBackToMenu"],
+    "maxRetries": 5,
+    "preDelay": 500,
+    "postDelay": 500
+  },
+
+  "ForceBackToMenu": {
+    "action": "ClickXY",
+    "doc": "强制返回: 点击左上角返回区域",
+    "algorithm": "DirectHit",
+    "position": [0.06, 0.06],
+    "next": ["NavigateToMenu"],
+    "failed_next": ["Stop"],
+    "maxRetries": 10,
+    "preDelay": 500,
+    "postDelay": 1000
+  },
+
+  "OpenSettingsMenu": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "点击主菜单右上角 Menu 按钮 → 打开菜单",
+    "roi": [0.84, 0.04, 0.98, 0.12],
+    "next": ["SelectSettingsOption"],
+    "failed_next": ["ForceBackToMenu", "Stop"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 1500
+  },
+
+  "SelectSettingsOption": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "在菜单中点击 設定/设置/Settings 选项",
+    "roi": [0.08, 0.36, 0.92, 0.50],
+    "next": ["SelectLiveSettings"],
+    "failed_next": ["CloseMenu", "Stop"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 2000
+  },
+
+  "SelectLiveSettings": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "在设置页面点击 LIVE 设置/ライブ設定 选项",
+    "roi": [0.08, 0.22, 0.92, 0.36],
+    "next": ["VerifyLiveSettingsPage"],
+    "failed_next": ["GoBackFromSettings", "Stop"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 2000
+  },
+
+  "============================================================": "页面验证",
+
+  "VerifyLiveSettingsPage": {
+    "action": "DoNothing",
+    "algorithm": "OcrDetect",
+    "doc": "OCR 确认已进入 LIVE 设置页面。检测关键词: LIVE/ライブ/设置/설정/settings",
+    "roi": [0.05, 0.06, 0.60, 0.14],
+    "next": ["ReadTimingAndSpeed"],
+    "failed_next": ["SelectLiveSettings"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 500
+  },
+
+  "ReadTimingAndSpeed": {
+    "action": "DoNothing",
+    "algorithm": "OcrDetect",
+    "doc": "OCR 读取 タイミング調整 和 ノーツ速度 的值。由 GameSettingsReader 处理。",
+    "roi": [],
+    "next": ["ReturnToMenu"],
+    "failed_next": ["ReturnToMenu"],
+    "maxRetries": 2,
+    "preDelay": 500,
+    "postDelay": 500
+  },
+
+  "============================================================": "返回主菜单",
+
+  "ReturnToMenu": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "点击左上角返回按钮 (点 2-3 次, 确保返回主菜单)",
+    "roi": [0.02, 0.03, 0.12, 0.10],
+    "next": ["ReturnToMenu2"],
+    "failed_next": ["Stop"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 1000
+  },
+
+  "ReturnToMenu2": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "第二次点击返回",
+    "roi": [0.02, 0.03, 0.12, 0.10],
+    "next": ["CloseFinalPopup"],
+    "failed_next": ["Stop"],
+    "maxRetries": 3,
+    "preDelay": 300,
+    "postDelay": 1000
+  },
+
+  "CloseFinalPopup": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "如果有任何残留弹窗, 点击右上角关闭",
+    "roi": [0.84, 0.03, 0.98, 0.10],
+    "next": ["Stop"],
+    "failed_next": ["Stop"],
+    "maxRetries": 2,
+    "preDelay": 500,
+    "postDelay": 500
+  },
+
+  "============================================================": "通用操作",
+
+  "CloseMenu": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "关闭菜单/弹窗 (点击右上角或画面外)",
+    "roi": [0.84, 0.03, 0.98, 0.10],
+    "next": ["#next"],
+    "maxRetries": 3,
+    "preDelay": 200,
+    "postDelay": 500
+  },
+
+  "GoBackFromSettings": {
+    "action": "ClickSelf",
+    "algorithm": "BrightnessDetect",
+    "doc": "从设置子页面返回上级",
+    "roi": [0.02, 0.03, 0.12, 0.10],
+    "next": ["SelectLiveSettings"],
+    "maxRetries": 3,
+    "preDelay": 500,
+    "postDelay": 1000
+  },
+
+  "Stop": {
+    "action": "DoNothing",
+    "doc": "停止流水线",
+    "next": []
+  }
+}

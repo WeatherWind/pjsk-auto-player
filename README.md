@@ -33,6 +33,7 @@ python main.py setup        # 设置向导
 
 | 版本 | 特性 |
 |------|------|
+| **v5.3.0** | 🎮 游戏设置自动读取 + 多服适配 (JP/TW/CN/KR/EN) + 自动校准 |
 | **v5.2.0** | ⚡ 异步截屏 + Raw ADB + 批量触摸 — 端到端延迟大幅降低 |
 | **v5.1.0** | 🌍 i18n 国际化 (中/英/日) + 📱 PWA 手机控制面板 + 🌓 双主题 + 🧪 单元测试 |
 | **v5.0.0** | 🖥️ MAA 风格原生桌面 GUI + 反检测 + 活动检测 |
@@ -94,6 +95,24 @@ python main.py setup        # 设置向导
 
 ### ⚡ PID 自适应延迟
 每次执行结束后基于实际触发提前量自动微调延迟补偿，逐步收敛到最佳值。
+
+### 🎮 游戏设置自动读取 (v5.3.0)
+自动导航到游戏内 LIVE 设置页面，OCR 读取 `タイミング調整` (判定时移) 和 `ノーツ速度` (音符速度)，自动映射为软件参数并校准预测引擎。
+
+- **自动校准**: `timing_offset` → `advance_ms` / `note_speed` → `velocity_factor` 自动换算
+- **6 服务器支持**: JP / TW / CN / KR / EN + 自动检测 (包名/OCR 标签/手动指定)
+- **零配置启动**: 默认开启，首次执行自动读取 → 后续复用缓存
+- **独立命令**: `python main.py read-settings --server jp`
+
+```
+┌──────────────────────────────────────────────┐
+│  游戏内 LIVE 设置                              │
+│  タイミング調整: +5    →   advance_ms -5ms     │
+│  ノーツ速度:    10.5   →   velocity × 1.05     │
+│  ─────────────────────────────────────────   │
+│  自动写入 config.yaml  +  更新预测引擎         │
+└──────────────────────────────────────────────┘
+```
 
 ### 📡 多后端控制器
 - **scrcpy 60 FPS** — 视频流方式高速截图
@@ -260,6 +279,11 @@ pjsk-auto-player/
 ├── wizard/                     # 设置向导
 │   └── setup.py                # 5 步向导
 │
+├── game_settings/              # 游戏设置读取 (v5.3.0)
+│   ├── server_config.py        # 5 服 UI/OCR 配置 + 自动检测
+│   ├── reader.py               # 导航 → OCR 读取核心
+│   └── calibrator.py           # 参数映射 + 校准引擎
+│
 ├── handlers/                   # 游戏处理器
 │   ├── goto_game.py            # 游戏启动/导航
 │   ├── handle_result.py        # 结算/分数处理
@@ -350,6 +374,8 @@ pjsk-auto-player/
 | `python main.py web` | 仅启动 Web 服务器 |
 | `python main.py daemon` | 后台守护进程 |
 | `python main.py calibrate` | 一键校准 |
+| `python main.py read-settings` | 读取游戏内设置 (v5.3.0) |
+| `python main.py read-settings --server jp` | 指定日服读取 |
 | `python main.py setup` | 设置向导 |
 | `python main.py status` | 查看守护进程状态 |
 | `python main.py stop` | 停止守护进程 |
