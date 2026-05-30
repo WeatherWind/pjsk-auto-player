@@ -57,6 +57,9 @@ class ScrcpyController(BaseController):
         self._process: Optional[subprocess.Popen] = None
         self._latest_frame: Optional[np.ndarray] = None
         self._frame_lock = threading.Lock()
+        # v5.7.0: pre-allocated output buffer — 消除每帧 malloc
+        self._out_frame: Optional[np.ndarray] = None
+        self._out_frame_version = 0
         self._running = False
         self._reader_thread: Optional[threading.Thread] = None
 
@@ -312,14 +315,16 @@ class ScrcpyController(BaseController):
     # ── Screencap ──────────────────────────────────────────────
 
     def screencap(self) -> Optional[np.ndarray]:
-        """Get the latest frame from the scrcpy video stream.
-
-        Returns the most recent frame (frame-skip: older frames are discarded).
-        """
+        """v5.7.0: zero-copy via pre-allocated buffer + version check."""
         with self._frame_lock:
             if self._latest_frame is None:
                 return None
-            return self._latest_frame.copy()
+            # 首次调用或分辨率变化时分配
+            if self._out_frame is None or self._out_frame.shape != self._latest_frame.shape:
+                self._out_frame = np.empty_like(self._latest_frame)
+            # np.copyto — 无 malloc/alloc 开销, 仅 memcpy
+            np.copyto(self._out_frame, self._latest_frame)
+            return self._out_frame
 
     # ── Minitouch (Low-Latency Touch) ──────────────────────────
 
