@@ -66,6 +66,7 @@ class ScrcpyController(BaseController):
         self._ppm_width = 0
         self._ppm_height = 0
         self._ppm_data_size = 0
+        self._max_buffer_bytes = 10 * 1024 * 1024  # v5.4: 10MB buffer cap
 
         # minitouch state
         self._mt_socket: Optional[socket.socket] = None
@@ -246,6 +247,14 @@ class ScrcpyController(BaseController):
 
         PPM format: "P6\\n<width> <height>\\n255\\n" followed by W×H×3 RGB bytes.
         """
+        # v5.4: buffer 上限保护 — 超过时丢弃并重置解析器
+        if len(self._buffer) > self._max_buffer_bytes:
+            logger.warning("PPM buffer overflow (%d bytes), resetting parser",
+                           len(self._buffer))
+            self._buffer = b""
+            self._state = "header"
+            return
+
         while True:
             if self._state == "header":
                 # Find "P6\n"

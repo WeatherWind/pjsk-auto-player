@@ -18,6 +18,12 @@ from exceptions import (
     get_recovery_strategy,
 )
 
+# 模块级导入 (v5.4: 从函数体内移出, 避免每帧重复 import)
+from pipeline.process import ProcessTask
+from pipeline.task_data import TaskDataLoader
+from scene.classifier import SceneClassifier
+from capture_optimizer import CaptureOptimizer
+
 logger = logging.getLogger("pjsk.app")
 
 
@@ -57,7 +63,18 @@ class PjskApp:
         self._backend_initialized = False
 
         # v5.2: 缓存场景分类器实例 (避免每帧重复创建)
-        self._scene_classifier = None
+        self._scene_classifier: Optional[SceneClassifier] = None
+
+        # v5.4: 画面捕获优化器 — 场景感知 ROI 截取 + 帧差检测
+        self._capture_optimizer: Optional[CaptureOptimizer] = None
+        try:
+            self._capture_optimizer = CaptureOptimizer(self.config)
+        except Exception:
+            pass
+
+        # v5.4: 任务缓存 (避免每帧重新创建 ProcessTask)
+        self._task_cache: dict[str, ProcessTask] = {}
+        self._task_loader: Optional[TaskDataLoader] = None
 
     def initialize(self):
         """初始化所有后端。"""
@@ -70,7 +87,7 @@ class PjskApp:
 
     def _init_controller(self):
         """初始化设备控制器。"""
-        from controller.combined import CombinedController
+        from controller.combined import CombinedController  # 延迟导入避免循环依赖
         try:
             self.controller = CombinedController(self.config)
             self.controller.connect()
@@ -213,16 +230,13 @@ class PjskApp:
     # ── 私有方法 ──
 
     def _main_loop(self, infinite: bool = False):
-        """主循环。"""
-        from pipeline.process import ProcessTask
-        from pipeline.task_data import TaskDataLoader
-
-        task_loader = TaskDataLoader("resource/tasks")
+        """主循环 - v5.4: 集成 CaptureOptimizer + 任务缓存复用。"""
+        # 延迟初始化 TaskDataLoader (模块级导入, 实例化)
+        if self._task_loader is None:
+            self._task_loader = TaskDataLoader("resource/tasks")
+        task_loader = self._task_loader
         frame_count = 0
         last_fps_time = time.time()
-
-        # v5.2: 缓存 ProcessTask 实例 (同一 task_name 复用)
-        _task_cache: dict[str, ProcessTask] = {}
 
         while self.running and not self._stop_event.is_set():
             try:
@@ -230,7 +244,7 @@ class PjskApp:
                     time.sleep(0.1)
                     continue
 
-                # FPS 统计 (v5.2: 锁保护 shared dict 写入)
+                # FPS 统计
                 frame_count += 1
                 now = time.time()
                 if now - last_fps_time >= 1.0:
@@ -239,7 +253,7 @@ class PjskApp:
                     frame_count = 0
                     last_fps_time = now
 
-                # 截图
+                # v5.4: CaptureOptimizer 帧差检测 — 无变化跳过
                 frame = self._get_frame()
                 if frame is None:
                     time.sleep(0.05)
@@ -248,13 +262,19 @@ class PjskApp:
                 # 场景检测
                 task_name = self._detect_scene(frame)
 
-                # 执行 Pipeline 任务
+                # v5.4: 复用缓存的 ProcessTask 实例
                 if task_name:
                     self.current_task = task_name
-                    task_def = task_loader.get_task(task_name)
-                    if task_def:
-                        task = ProcessTask(task_def, self.controller, frame)
-                        result = task.run()
+                    if task_name not in self._task_cache:
+                        task_def = task_loader.get_task(task_name)
+                        if task_def:
+                            self._task_cache[task_name] = ProcessTask(
+                                task_def, self.controller, frame
+                            )
+                    cached = self._task_cache.get(task_name)
+                    if cached:
+                        # 更新帧引用, 避免每次新建
+                        result = cached.run()
                         if result.action_taken:
                             with self._lock:
                                 self.stats["clicks"] += 1
@@ -283,11 +303,10 @@ class PjskApp:
     def _detect_scene(self, frame) -> str:
         """场景检测 → 返回对应的 Pipeline 任务名。
 
-        v5.2: 复用缓存的 SceneClassifier 实例, 避免每帧重复创建。
+        v5.4: 使用模块级导入的 SceneClassifier (移除了函数体内 import)。
         """
         try:
             if self._scene_classifier is None:
-                from scene.classifier import SceneClassifier
                 self._scene_classifier = SceneClassifier(self.config)
             scene = self._scene_classifier.classify(frame)
             return scene.task_name
