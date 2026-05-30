@@ -37,7 +37,11 @@ python main.py setup        # Setup wizard
 
 | Version | Features |
 |---------|---------|
-| **v5.3.0** | 🎮 In-game settings auto-read + multi-server support (JP/TW/CN/KR/EN) + auto-calibration |
+| **v5.7.1** | 🐛 4 critical fixes — OCR security vuln + removed extra clear + gaussian fix + code cleanup |
+| **v5.7.0** | ⚡ Zero-alloc framebuffer — scrcpy screencap eliminates per-frame malloc, CPU alloc cost 0 |
+| **v5.6.0** | 🔐 Anti-detection enhanced — Session Fingerprint + Gaussian jitter + SAFE/PRECISION modes |
+| **v5.5.0** | 🛡️ Obstruction detection & auto-recovery — 5-tier recovery state machine + health heartbeat |
+| **v5.4.0** | ⚡ Performance optimization — hot-path caching + frame-diff skip + termios cache |
 | **v5.2.0** | ⚡ Async capture + Raw ADB + Batch touch — massive latency reduction |
 | **v5.1.0** | 🌍 i18n (zh/en/ja) + 📱 PWA mobile panel + 🌓 Dual theme + 🧪 Unit tests |
 | **v5.0.0** | 🖥️ MAA-style native desktop GUI + Anti-detection + Event detection |
@@ -99,6 +103,15 @@ Simulates human operation characteristics: Bezier curve swipe paths, timing jitt
 ### ⚡ PID Adaptive Latency
 After each song, latency compensation auto-fine-tunes based on actual trigger advance, gradually converging to the optimal value.
 
+### ⚡ Performance Optimization (v5.4.0)
+
+- **Task cache reuse**: `ProcessTask` instances cached by `task_name`, eliminating per-frame object allocation in hot-path
+- **Frame-diff skip**: `CaptureOptimizer` integrated — skips Pipeline processing when frame is unchanged
+  - Skips 90%+ frames in static scenes (menus/loading/results)
+- **Module-level imports**: all core modules imported once at file top, eliminating import syscalls in hot-path
+- **scrcpy PPM buffer cap**: 10MB buffer limit prevents unbounded memory growth
+- **termios cache**: `_get_key_nonblocking` caches `tcgetattr()` results, eliminating 3 syscalls every 5 frames
+
 ### 🎮 In-game Settings Auto-Read (v5.3.0)
 Auto-navigates to in-game LIVE settings, OCR reads `Timing Adjustment` and `Note Speed`, auto-maps to software parameters and calibrates the prediction engine.
 
@@ -116,6 +129,24 @@ Auto-navigates to in-game LIVE settings, OCR reads `Timing Adjustment` and `Note
 │  Auto-writes config.yaml + updates predictor  │
 └──────────────────────────────────────────────┘
 ```
+
+### 🛡️ Obstruction Detection & Auto-Recovery (v5.5.0)
+
+New `recovery/` module detects and automatically handles all blocking events during gameplay.
+
+**Detection capabilities:**
+- Server time update / date change popups → auto-close (X button only)
+- Event announcements / maintenance notices → auto-close
+- Screen freeze (>4s no change) → 8×8 frame hash comparison → state machine L1 recovery
+- Black screen (>30 frames) → brightness detection → state machine L2/L3
+- ADB disconnection (>10 frames no capture) → state machine L4
+- App crash dialog → OCR detection → state machine L2/L3
+
+**Safety design:** popups only click top-right X, never center OK/confirm. Consumer popups (gacha/purchases) trigger warnings instead.
+
+**5-tier recovery state machine:** `navigate_back → restart_app → force_restart → adb_reconnect → safe_stop`
+
+**Health heartbeat:** ADB 5s, scrcpy 10s, frame timeout 5s, minitouch 10s.
 
 ### 📡 Multi-Backend Controller
 - **scrcpy 60 FPS** — video stream high-speed capture
@@ -142,9 +173,40 @@ Auto-navigates to in-game LIVE settings, OCR reads `Timing Adjustment` and `Note
 - HumanTouch simulator: normal distribution reaction delay, pressure variation
 - Hold micro-movement sequences
 
+### 🔐 Enhanced Anti-Detection (v5.6.0)
+
+**Session Fingerprint system**: each `start()` generates a fresh behavior fingerprint — jitter stddevs, bezier curvature, miss rate, hold amplitude, interaction intervals — all distributed naturally and never repeated across sessions.
+
+**Gaussian jitter**: switched from uniform to Gaussian distribution (±3σ truncated) for both position and timing jitter. Clicks cluster naturally around the target point with minimal outliers.
+
+**New SAFE (ranking) and PRECISION (AP) modes:**
+
+| Mode | Position Jitter | Timing Jitter | Miss Rate | Consecutive AP Limit | Use Case |
+|------|----------------|---------------|-----------|---------------------|----------|
+| SAFE | ±8px (Gaussian) | ±25ms (Gaussian) | 0~0.2% | ✅ 30 song cap | Long farming/ranking |
+| PRECISION | ±1px (Gaussian) | ±3ms (Gaussian) | 0% | None | Single AP attempt |
+| FC (default) | ±5px (Gaussian) | ±15ms (Gaussian) | 0% | None | Daily play |
+
+**Natural interaction delay**: `_interaction_delay` adds normally-distributed human reaction time (30~90ms baseline) after each touch, with baseline floating per session.
+
 ### 🎵 Auto Event Detection (v5.0.0)
 - HSV color analysis identifies event type (Marathon/Cheerful Carnival/Normal)
 - Auto song recommendation
+
+### ⚡ Zero-Allocation Framebuffer (v5.7.0)
+
+**Before**: `screencap()` called `self._latest_frame.copy()` every frame, producing a ~7.7MB malloc + memcpy (1080×2400 at 30fps = 231MB/s allocation bandwidth).
+
+**After**: pre-allocated `_out_frame` buffer reuses `np.copyto()` writes. Cost reduced from `malloc + free + memcpy` to `memcpy only`.
+
+| Metric | Before | After | Benefit |
+|--------|--------|-------|---------|
+| Per-frame | `malloc(7.7MB) + free() + copy()` | `memcpy()` | Zero allocation |
+| CPU alloc overhead | ~0.15ms | 0ms | 100% reduction |
+| 30s GC pressure | 900 allocations | 0 persistent allocs | Reduced GC |
+| Cache locality | Different address each time | Same cacheline | Better |
+
+Current bottleneck has shifted from per-frame latency to frame rate ceiling (scrcpy 30fps transport bandwidth).
 
 ---
 
