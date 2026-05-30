@@ -248,8 +248,6 @@ class RecoveryStateMachine:
             self.controller.app_stop(self._PACKAGE)
             if hasattr(self.controller, "shell"):
                 self.controller.shell(f"am force-stop {self._PACKAGE}")
-                # 清除缓存 (可选)
-                self.controller.shell(f"pm clear {self._PACKAGE}")
             time.sleep(3.0)
             self.controller.app_start(self._PACKAGE)
             logger.info("[Recovery] 💥 强制重启 %s", self._PACKAGE)

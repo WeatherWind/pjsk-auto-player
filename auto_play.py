@@ -1208,19 +1208,23 @@ class AutoPlayer:
     # ──────────────────────────────────────────
 
     def _apply_position_jitter(self, x: int, y: int) -> tuple[int, int]:
-        """对点击坐标施加随机偏移，模拟手指落点不精确。"""
+        """v5.6.0: 高斯坐标抖动, +/-3sigma 截断。"""
         if not self.rand_enabled or self.position_jitter_px <= 0:
             return x, y
-        jx = random.randint(-self.position_jitter_px, self.position_jitter_px)
-        jy = random.randint(-self.position_jitter_px, self.position_jitter_px)
+        std = self.position_jitter_px
+        jx = int(random.gauss(0, std))
+        jy = int(random.gauss(0, std))
+        jx = max(-std * 3, min(std * 3, jx))
+        jy = max(-std * 3, min(std * 3, jy))
         return max(0, x + jx), max(0, y + jy)
 
     def _apply_hold_jitter(self, base_ms: int) -> int:
-        """对长按时长施加随机偏移。"""
+        """v5.6.0: 高斯时长偏移。"""
         if not self.rand_enabled or self.hold_duration_jitter_ms <= 0:
             return base_ms
-        offset = random.randint(-self.hold_duration_jitter_ms,
-                                self.hold_duration_jitter_ms)
+        std = self.hold_duration_jitter_ms
+        offset = int(random.gauss(0, std))
+        offset = max(-std * 3, min(std * 3, offset))
         return max(10, base_ms + offset)
 
     def _should_skip(self) -> bool:

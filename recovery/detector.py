@@ -210,8 +210,10 @@ class ObstructionDetector:
 
         # ── OCR 确认文字内容 ──
         if not self._init_ocr():
-            # 无 OCR 时保守策略: 只认可几何匹配, 但标记为未知
-            return (False, "geo_match_only")
+            # 无 OCR 时 ⚠ 保守策略: 不自动关闭, 走 verify_close_button 验证
+            # geo_match_only 标记为消费弹窗以避免误关闭
+            logger.warning("[Detector] OCR 不可用, 跳过弹窗自动关闭")
+            return (True, "no_ocr_skip")
 
         try:
             # 读取弹窗内容区域文字 (排除按钮区域)

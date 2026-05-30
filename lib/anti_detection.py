@@ -240,8 +240,6 @@ def get_human_touch() -> HumanTouch:
     return _global_touch
 
 # v5.6.0: Session Fingerprint
-from dataclasses import dataclass
-import random
 
 @dataclass
 class SessionFingerprint:

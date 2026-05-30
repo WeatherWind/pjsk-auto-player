@@ -23,6 +23,7 @@ from pipeline.process import ProcessTask
 from pipeline.task_data import TaskDataLoader
 from scene.classifier import SceneClassifier
 from capture_optimizer import CaptureOptimizer
+import cv2  # v5.7.1: 模块级导入, 避免热路径 import
 from recovery import ObstructionEngine
 
 logger = logging.getLogger("pjsk.app")
@@ -276,8 +277,8 @@ class PjskApp:
 
                 # v5.5: 阻塞检测与恢复 (在 pipeline 之前)
                 if self._obstruction_engine:
-                    import cv2
-                    frame_hash = hash(cv2.resize(frame, (8, 8)).tobytes())
+                    # v5.7.1: 复用 scene classifier 的 frame_hash, 不做 repeat compute
+                    frame_hash = self._scene_classifier._last_frame_hash if self._scene_classifier else 0
                     result = self._obstruction_engine.process_frame(
                         frame, task_name, frame_hash
                     )
