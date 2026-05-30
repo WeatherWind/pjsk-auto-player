@@ -39,12 +39,12 @@ python main.py setup        # Setup wizard
 |---------|---------|
 | **v5.7.1** | 🐛 4 critical fixes — OCR security vuln + removed extra clear + gaussian fix + code cleanup |
 | **v5.7.0** | ⚡ Zero-alloc framebuffer — scrcpy screencap eliminates per-frame malloc, CPU alloc cost 0 |
-| **v5.6.0** | 🔐 Anti-detection enhanced — Session Fingerprint + Gaussian jitter + SAFE/PRECISION modes |
-| **v5.5.0** | 🛡️ Obstruction detection & auto-recovery — 5-tier recovery state machine + health heartbeat |
+| **v5.6.0** | 🔐 Behavioral Diversity — Session Fingerprint + Gaussian jitter + SAFE/PRECISION modes |
+| **v5.5.0** | 🛡️ Obstruction detection & auto-recovery — 5-tier recovery state machine + health heartbeat + popup handling |
 | **v5.4.0** | ⚡ Performance optimization — hot-path caching + frame-diff skip + termios cache |
 | **v5.2.0** | ⚡ Async capture + Raw ADB + Batch touch — massive latency reduction |
 | **v5.1.0** | 🌍 i18n (zh/en/ja) + 📱 PWA mobile panel + 🌓 Dual theme + 🧪 Unit tests |
-| **v5.0.0** | 🖥️ MAA-style native desktop GUI + Anti-detection + Event detection |
+| **v5.0.0** | 🖥️ MAA-style native desktop GUI + Operation naturalization + Event type recognition |
 | **v4.11.0** | 🖥️ Out-of-box: Desktop app + auto browser + first-run wizard + system tray |
 | **v4.10.0** | 🧬 Deep ALAS integration: cached_property/Resource/color preprocessing/Benchmark/Config Schema |
 | **v4.9.0** | 🏗️ MAA/ALAS fusion architecture: Pipeline V2 + multi-algo scene voting + Web dark panel + tiered errors + daemon |
@@ -132,7 +132,7 @@ Auto-navigates to in-game LIVE settings, OCR reads `Timing Adjustment` and `Note
 
 ### 🛡️ Obstruction Detection & Auto-Recovery (v5.5.0)
 
-New `recovery/` module detects and automatically handles all blocking events during gameplay.
+New `recovery/` module detects and automatically handles common blocking events during gameplay.
 
 **Detection capabilities:**
 - Server time update / date change popups → auto-close (X button only)
@@ -168,14 +168,14 @@ New `recovery/` module detects and automatically handles all blocking events dur
 - **Hot reload**: auto-reload on file change (ConfigWatcher)
 - **CLI config management**: `pjsk config set play.mode ap`
 
-### 🔐 Anti-Detection (v5.0.0)
+### 🔐 Operation Naturalization (v5.0.0)
 - Bezier curve swipe paths, simulating human finger arcs
 - HumanTouch simulator: normal distribution reaction delay, pressure variation
 - Hold micro-movement sequences
 
-### 🔐 Enhanced Anti-Detection (v5.6.0)
+### 🔐 Enhanced Behavioral Diversity (v5.6.0)
 
-**Session Fingerprint system**: each `start()` generates a fresh behavior fingerprint — jitter stddevs, bezier curvature, miss rate, hold amplitude, interaction intervals — all distributed naturally and never repeated across sessions.
+**Session Fingerprint system**: each `start()` generates a fresh behavior fingerprint — jitter stddevs, bezier curvature, miss rate, hold amplitude, interaction intervals — all distributed naturally and never repeated.
 
 **Gaussian jitter**: switched from uniform to Gaussian distribution (±3σ truncated) for both position and timing jitter. Clicks cluster naturally around the target point with minimal outliers.
 
@@ -183,15 +183,15 @@ New `recovery/` module detects and automatically handles all blocking events dur
 
 | Mode | Position Jitter | Timing Jitter | Miss Rate | Consecutive AP Limit | Use Case |
 |------|----------------|---------------|-----------|---------------------|----------|
-| SAFE | ±8px (Gaussian) | ±25ms (Gaussian) | 0~0.2% | ✅ 30 song cap | Long farming/ranking |
-| PRECISION | ±1px (Gaussian) | ±3ms (Gaussian) | 0% | None | Single AP attempt |
+| SAFE | ±8px (Gaussian) | ±25ms (Gaussian) | 0~0.2% | ✅ 30 song cap | Extended auto-play |
+| PRECISION | ±1px (Gaussian) | ±3ms (Gaussian) | 0% | None | High-precision single run |
 | FC (default) | ±5px (Gaussian) | ±15ms (Gaussian) | 0% | None | Daily play |
 
 **Natural interaction delay**: `_interaction_delay` adds normally-distributed human reaction time (30~90ms baseline) after each touch, with baseline floating per session.
 
-### 🎵 Auto Event Detection (v5.0.0)
+### 🎵 Event Type Recognition (v5.0.0)
 - HSV color analysis identifies event type (Marathon/Cheerful Carnival/Normal)
-- Auto song recommendation
+- Song recommendation
 
 ### ⚡ Zero-Allocation Framebuffer (v5.7.0)
 
