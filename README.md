@@ -1,5 +1,9 @@
 # PJSK Auto Player — CV 自动化研究工具
 
+[![zh-CN](https://img.shields.io/badge/README-中文-blue)](README.md)
+[![en](https://img.shields.io/badge/README-English-lightgrey)](README.en.md)
+[![ja](https://img.shields.io/badge/README-日本語-lightgrey)](README.ja.md)
+
 > 基于 ADB + OpenCV 的计算机视觉与自动化控制研究项目。
 > 参考 MAA (MaaAssistantArknights) + ALAS (AzurLaneAutoScript) + MaaFramework 架构设计。
 
