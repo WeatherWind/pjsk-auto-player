@@ -60,6 +60,22 @@ PERFORMANCE_MODES = {
         "miss_chance": 0.003,
         "hold_duration_jitter_ms": 50,
     },
+    "SAFE": {
+        "label": " SAFE (Ranking)",
+        "description": "冲榜挂机, 限制连续AP, 抖动最大",
+        "timing_jitter_ms": 25,
+        "position_jitter_px": 8,
+        "miss_chance": 0.001,
+        "hold_duration_jitter_ms": 50,
+    },
+    "PRECISION": {
+        "label": " PRECISION (AP)",
+        "description": "高精度冲AP, 抖动最小",
+        "timing_jitter_ms": 3,
+        "position_jitter_px": 1,
+        "miss_chance": 0.0,
+        "hold_duration_jitter_ms": 10,
+    },
 }
 
 MODE_NAMES = list(PERFORMANCE_MODES.keys())
@@ -403,8 +419,14 @@ class AutoPlayer:
         # 预测参数
         self.use_prediction = config.get("prediction", {}).get("enabled", True)
 
-        # ═══ 缓存: 避免每帧重建 ═══
+        # ═══ v5.6.0: cache items ═══
         self._lane_positions: Optional[list] = None
+        self._session_fingerprint = None
+        self._consecutive_perfect: int = 0
+        self._last_action_time: float = 0.0
+
+        # safe mode limit
+        self._interaction_enabled = True
 
         # ════════════════════════════════════════════
         # 操作随机化参数
@@ -460,6 +482,9 @@ class AutoPlayer:
             else:
                 logger.warning("延迟测量失败, 使用配置值")
                 self.tracker.set_latency(self.latency_comp or 150)
+
+        # ═══ v5.6.0: 生成 session 行为指纹 ═══
+        self._generate_fingerprint()
 
         # ═══ v5.3.0: 自动读取游戏内设置并校准 ═══
         self._read_game_settings()
@@ -1150,6 +1175,34 @@ class AutoPlayer:
     def _release_all(self) -> None:
         self._held_lanes.clear()
 
+
+    # ── v5.6.0: Session Interaction Control ──
+
+    def _generate_fingerprint(self) -> None:
+        """生成 session 行为指纹 (session 内不变)。"""
+        try:
+            from lib.anti_detection import generate_session_fingerprint
+            fp = generate_session_fingerprint(self._mode.lower())
+            self._session_fingerprint = fp
+            logger.info("🔑 Session fingerprint: %s", fp)
+        except ImportError:
+            self._session_fingerprint = None
+            logger.debug("Session fingerprint unavailable")
+
+    def _interaction_delay(self) -> None:
+        """模拟人类操作间自然反应延迟。"""
+        if self._session_fingerprint is None or not self.rand_enabled:
+            return
+        import time
+        now = time.time()
+        elapsed = now - self._last_action_time
+        base = max(0.01, self._session_fingerprint.reaction_base_ms / 1000.0)
+        target = base + random.gauss(0, 0.015)
+        target = max(0.008, min(0.15, target))
+        if elapsed < target:
+            time.sleep(target - elapsed)
+        self._last_action_time = time.time()
+
     # ──────────────────────────────────────────
     # 点击随机化 (反封号) —— 模拟人类操作
     # ──────────────────────────────────────────
@@ -1171,8 +1224,14 @@ class AutoPlayer:
         return max(10, base_ms + offset)
 
     def _should_skip(self) -> bool:
-        """随机决定是否跳过本次点击 (模拟漏键)。"""
-        if not self.rand_enabled or self.miss_chance <= 0:
+        """v5.6.0: 随机漏键 + safe 模式连续 AP 限制。"""
+        if not self.rand_enabled or self._mode == "PRECISION":
+            return False
+        # safe 模式: 超过连续 Perfect 上限则强制漏一次
+        if self._mode == "SAFE" and self._consecutive_perfect >= 30:
+            self._consecutive_perfect = 0
+            return True
+        if self.miss_chance <= 0:
             return False
         return random.random() < self.miss_chance
 
@@ -1199,6 +1258,7 @@ class AutoPlayer:
         # 同步到 NoteTracker (预测引擎也使用这些随机化参数)
         self.tracker.timing_jitter_ms = preset["timing_jitter_ms"]
         self.tracker.rand_enabled = self.rand_enabled
+        self._consecutive_perfect = 0  # v5.6.0
 
         logger.info(f"🎮 切换到 {preset['label']}  ─ "
                      f"时机±{preset['timing_jitter_ms']}ms  "

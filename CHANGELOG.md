@@ -5,6 +5,44 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.6.0] - 2026-05-30
+
+### 🔐 对抗检测增强 + 单次 AP 模式 + Session Fingerprint
+
+#### 行为指纹系统 (Session Fingerprint)
+- **每次 `start()` 生成新的行为指纹**，session 间参数各不相同
+- 指纹包含: 坐标抖动标准差、时机抖动标准差、贝塞尔弯曲度、漏键率、
+  长按微动幅度、操作间隔基准、触摸持续时间
+- 参数值符合自然统计分布，不重复
+
+#### 高斯抖动
+- `_apply_position_jitter`: 均匀分布 → 高斯分布 (±3σ 截断)
+- `_apply_hold_jitter`: uniform → gaussian
+- 点击坐标自然分布在目标点周围，极少极端值
+
+#### 新增 SAFE (冲榜) 和 PRECISION (AP) 模式
+- **SAFE**: 模拟人类波动，限制连续 AP (>30 次后强制漏键)，
+  抖动最大 (pos=±8px, timing=±25ms)
+- **PRECISION**: 极限精度，抖动最小 (pos=±1px, timing=±3ms)，
+  零漏键，适合单次冲 AP
+
+#### 自然操作间隔
+- `_interaction_delay`: 每次 touch 操作后模拟人类反应延迟
+- 延迟值呈正态分布，基准值 session 间浮动 (30~90ms)
+
+#### 模式行为对比
+
+| 模式 | 坐标抖动 | 时机抖动 | 漏键率 | 连续 AP 限制 | 适用场景 |
+|------|---------|---------|-------|-------------|---------|
+| SAFE | ±8px (高斯) | ±25ms (高斯) | 0~0.2% | ✅ 30 次上限 | 长时间冲榜/挂机 |
+| PRECISION | ±1px (高斯) | ±3ms (高斯) | 0% | 无 | 单次冲击 AP |
+| FC | ±5px (高斯) | ±15ms (高斯) | 0% | 无 | 默认 |
+
+#### 文件变更
+- `lib/anti_detection.py` — +SessionFingerprint, +gauss_jitter, +generate_session_fingerprint
+- `auto_play.py` — 高斯抖动, 模式扩展, session fingerprint, 自然间隔
+- `config/default.yaml` — play.mode 新增 safe/precision
+
 ## [5.5.0] - 2026-05-30
 
 ### 🛡️ 阻塞检测与自动恢复系统 (Obstruction & Recovery)

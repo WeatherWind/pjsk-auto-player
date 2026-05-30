@@ -238,3 +238,65 @@ def get_human_touch() -> HumanTouch:
     if _global_touch is None:
         _global_touch = HumanTouch()
     return _global_touch
+
+# v5.6.0: Session Fingerprint
+from dataclasses import dataclass
+import random
+
+@dataclass
+class SessionFingerprint:
+    position_std_rel: float = 0.005
+    timing_std_ms: float = 15.0
+    bezier_randomness: float = 0.02
+    miss_rate: float = 0.001
+    hold_jitter_rel: float = 0.002
+    reaction_base_ms: float = 60.0
+    touch_duration_ms: float = 40.0
+    max_consecutive_perfect: int = 0
+
+    def __repr__(self):
+        parts = []
+        parts.append('pos_std=' + f'{self.position_std_rel:.4f}')
+        parts.append('timing_std=' + f'{self.timing_std_ms:.1f}ms')
+        parts.append('miss=' + f'{self.miss_rate:.4f}')
+        parts.append('bezier=' + f'{self.bezier_randomness:.3f}')
+        parts.append('max_perfect=' + str(self.max_consecutive_perfect))
+        return 'SessionFingerprint(' + ', '.join(parts) + ')'
+
+
+def gauss_jitter(value, std, clamp=3.0):
+    j = random.gauss(0, std)
+    j = max(-clamp * std, min(clamp * std, j))
+    return value + j
+
+
+def generate_session_fingerprint(mode="fc"):
+    fp = SessionFingerprint()
+    if mode == 'safe':
+        fp.position_std_rel = random.uniform(0.004, 0.010)
+        fp.timing_std_ms = random.uniform(12, 28)
+        fp.bezier_randomness = random.uniform(0.02, 0.05)
+        fp.miss_rate = random.choices([0, 0.0005, 0.001, 0.002], weights=[4,3,2,1])[0]
+        fp.hold_jitter_rel = random.uniform(0.001, 0.004)
+        fp.reaction_base_ms = random.uniform(50, 90)
+        fp.touch_duration_ms = random.uniform(30, 60)
+        fp.max_consecutive_perfect = random.randint(20, 80)
+    elif mode == 'precision':
+        fp.position_std_rel = random.uniform(0.001, 0.003)
+        fp.timing_std_ms = random.uniform(3, 8)
+        fp.bezier_randomness = random.uniform(0.005, 0.015)
+        fp.miss_rate = 0.0
+        fp.hold_jitter_rel = random.uniform(0.0005, 0.002)
+        fp.reaction_base_ms = random.uniform(30, 50)
+        fp.touch_duration_ms = random.uniform(25, 40)
+        fp.max_consecutive_perfect = 0
+    else:
+        fp.position_std_rel = random.uniform(0.003, 0.006)
+        fp.timing_std_ms = random.uniform(8, 18)
+        fp.bezier_randomness = random.uniform(0.01, 0.03)
+        fp.miss_rate = 0.0 if mode == 'ap' else random.uniform(0, 0.001)
+        fp.hold_jitter_rel = random.uniform(0.001, 0.003)
+        fp.reaction_base_ms = random.uniform(40, 70)
+        fp.touch_duration_ms = random.uniform(30, 50)
+        fp.max_consecutive_perfect = 0
+    return fp
