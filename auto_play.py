@@ -763,15 +763,15 @@ class AutoPlayer:
                 # 1. 截图 (screencap 自动使用异步帧, 零额外延迟)
                 frame = self.adb.screencap()
                 if frame is None:
-                    self._stats["misses"] += 1
-                    if self._stats["misses"] >= 3:
+                    misses = self._stats["misses"] = self._stats.get("misses", 0) + 1
+                    if misses >= 3:
                         logger.info(f"截图失败 ({self._stats['misses']}次), 尝试重连...")
                         if self._try_reconnect():
                             logger.info("重连成功")
                             self._stats["misses"] = 0
                         else:
                             logger.warning("重连失败, 继续尝试...")
-                    if self._stats["misses"] > 15:
+                    if misses > 15:
                         logger.error("连续 15 次截图失败, 停止")
                         break
                     time.sleep(0.3)
@@ -783,7 +783,11 @@ class AutoPlayer:
                 # 2. 分析 (判定线 + 预测区域)
                 state = self.analyzer.analyze(frame)
                 self._stats["frames"] += 1
-                self._stats["_frames_since_last_print"] = self._stats.get("_frames_since_last_print", 0) + 1
+                # v5.4: 热路径 — 直接 += 避免 dict.get
+                try:
+                    self._stats["_frames_since_print"] += 1
+                except KeyError:
+                    self._stats["_frames_since_print"] = 1
 
                 # 3. 如果不在游戏中, 等待 (自适应 sleep)
                 if not state.in_game:
@@ -895,6 +899,9 @@ class AutoPlayer:
 
         return False
 
+    # v5.4: 缓存 termios 属性避免每帧 tcgetattr
+    _cached_termios_attrs = None
+
     @staticmethod
     def _get_key_nonblocking() -> Optional[str]:
         """
@@ -920,12 +927,13 @@ class AutoPlayer:
             fd = sys.stdin.fileno()
             if not select.select([sys.stdin], [], [], 0)[0]:
                 return None
-            old = termios.tcgetattr(fd)
+            if AutoPlayer._cached_termios_attrs is None:
+                AutoPlayer._cached_termios_attrs = termios.tcgetattr(fd)
             try:
                 tty.setraw(fd)
                 return sys.stdin.read(1)
             finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                termios.tcsetattr(fd, termios.TCSADRAIN, AutoPlayer._cached_termios_attrs)
         except (ImportError, AttributeError, Exception):
             return None
 
@@ -952,48 +960,44 @@ class AutoPlayer:
         dt = now - self._stats["last_stats_time"]
 
         if dt > 0:
-            actual_frames = self._stats.get("_frames_since_last_print", self.stats_interval)
+            actual_frames = self._stats.get("_frames_since_print", self.stats_interval)
             fps = actual_frames / dt
             self._stats["fps"] = fps
-            self._stats["_frames_since_last_print"] = 0
+            self._stats["_frames_since_print"] = 0
 
         self._stats["last_stats_time"] = now
 
         use_ansi = self._supports_ansi()
 
+        fps = self._stats['fps']
+        frames = self._stats['frames']
+        taps = self._stats['taps']
+        flicks = self._stats['flicks']
+        holds = self._stats['holds']
+        comp = self.latency_comp
+        thresh = self.analyzer.bright_thresh
+
+        # v5.4: 单 f-string + 条件嵌入
+        pred_part = f" | 预触发: {self._stats['predicted_triggers']}" if self.use_prediction else ""
         if use_ansi:
-            stats_line = (
+            line = (
                 f"\033[36m[STATS]\033[0m "
-                f"FPS: \033[33m{self._stats['fps']:.1f}\033[0m | "
-                f"帧: {self._stats['frames']} | "
-                f"点: {self._stats['taps']} "
-                f"划: {self._stats['flicks']} "
-                f"按: {self._stats['holds']}"
-            )
-            if self.use_prediction:
-                stats_line += f" | 预触发: {self._stats['predicted_triggers']}"
-            stats_line += (
-                f" | 补偿: \033[32m{self.latency_comp}ms\033[0m | "
-                f"检测: \033[35m{self.analyzer.bright_thresh}\033[0m"
+                f"FPS: \033[33m{fps:.1f}\033[0m | "
+                f"帧: {frames} | 点: {taps} 划: {flicks} 按: {holds}"
+                f"{pred_part}"
+                f" | 补偿: \033[32m{comp}ms\033[0m | "
+                f"检测: \033[35m{thresh}\033[0m"
             )
         else:
-            stats_line = (
+            line = (
                 f"[STATS] "
-                f"FPS: {self._stats['fps']:.1f} | "
-                f"帧: {self._stats['frames']} | "
-                f"点: {self._stats['taps']} "
-                f"划: {self._stats['flicks']} "
-                f"按: {self._stats['holds']}"
-            )
-            if self.use_prediction:
-                stats_line += f" | 预触发: {self._stats['predicted_triggers']}"
-            stats_line += (
-                f" | 补偿: {self.latency_comp}ms | "
-                f"检测: {self.analyzer.bright_thresh}"
+                f"FPS: {fps:.1f} | "
+                f"帧: {frames} | 点: {taps} 划: {flicks} 按: {holds}"
+                f"{pred_part}"
+                f" | 补偿: {comp}ms | 检测: {thresh}"
             )
 
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        sys.stdout.write(stats_line)
+        sys.stdout.write("\r\033[K" + line)
         sys.stdout.flush()
 
     # ──────────────────────────────────────────
@@ -1073,16 +1077,13 @@ class AutoPlayer:
                 self._do_hold(note, lane_x, lane_y)
 
         # 帧级 cooldown 衰减
-        for lane in list(self._lane_tap_cooldown):
-            if self._lane_tap_cooldown[lane] > 0:
-                self._lane_tap_cooldown[lane] -= 1
-            else:
-                del self._lane_tap_cooldown[lane]
-        for lane in list(self._lane_flick_cooldown):
-            if self._lane_flick_cooldown[lane] > 0:
-                self._lane_flick_cooldown[lane] -= 1
-            else:
-                del self._lane_flick_cooldown[lane]
+        # v5.4: dict comprehension
+        self._lane_tap_cooldown = {
+            k: v - 1 for k, v in self._lane_tap_cooldown.items() if v > 1
+        }
+        self._lane_flick_cooldown = {
+            k: v - 1 for k, v in self._lane_flick_cooldown.items() if v > 1
+        }
 
         for lane in list(self._held_lanes):
             if lane not in current_active:

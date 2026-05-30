@@ -5,6 +5,37 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/),
 版本号遵循 [Semantic Versioning](https://semver.org/).
 
+## [5.4.0] - 2026-05-30
+
+### ⚡ 性能优化 — 主循环热路径 + 缓存复用
+
+- **`app.py`: 修复 `_task_cache` 未生效问题**
+  - 之前虽然声明了缓存 dict，但每帧仍创建新的 `ProcessTask` 实例
+  - 现在按 `task_name` 复用 ProcessTask，消除 hot-path 中的对象分配
+  - 传入 `context={"frame": frame}` 避免 `ProcessTask._run()` 重复截图
+
+- **`app.py`: 集成 `CaptureOptimizer` 帧差跳过**
+  - 场景分类后画面无变化时直接跳过 Pipeline 处理
+  - 菜单、加载、结算等静态画面场景下可跳过 90%+ 的处理帧
+
+- **`app.py`: 模块级导入**
+  - `ProcessTask`、`TaskDataLoader`、`SceneClassifier`、`CaptureOptimizer`
+    在文件顶部一次性导入，消除 hot-path 中的 `import` 系统调用
+
+- **`controller/scrcpy.py`: PPM buffer 上限保护**
+  - 添加 10MB buffer cap，防止主线程消费慢于 scrcpy 产生帧时内存无限增长
+
+- **`auto_play.py`: 主循环热路径优化**
+  - `_frames_since_print`: 用 `try/except KeyError` 替代 `dict.get()` 避免双次 dict 查找
+  - `misses` 计数器: 提取为局部变量，消除 3 次重复 dict 查找
+  - cooldown 衰减: 从 `dict copy + del` 循环改为 `dict comprehension` 单次分配
+  - `_print_stats`: 改用单 f-string + `\r\033[K` 终端清除，消除 `str+=` 中间字符串
+
+- **`auto_play.py`: `_get_key_nonblocking` termios 缓存**
+  - 缓存 `termios.tcgetattr()` 结果到类变量，消除每 5 帧的 3 次系统调用
+
+- **`screen_analyzer.py`: 清理 `_cached_gray` 死代码**
+
 ## [5.3.0] - 2026-05-30
 
 ### 🎮 游戏设置自动读取 + 多服适配

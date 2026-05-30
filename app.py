@@ -262,6 +262,16 @@ class PjskApp:
                 # 场景检测
                 task_name = self._detect_scene(frame)
 
+                # v5.4: CaptureOptimizer 帧差跳过
+                if self._capture_optimizer and task_name and self._scene_classifier:
+                    try:
+                        last = self._scene_classifier._last_result
+                        if last and not self._capture_optimizer.has_changed(frame,
+                                                                           last.scene_name):
+                            continue
+                    except Exception:
+                        pass
+
                 # v5.4: 复用缓存的 ProcessTask 实例
                 if task_name:
                     self.current_task = task_name
@@ -273,8 +283,8 @@ class PjskApp:
                             )
                     cached = self._task_cache.get(task_name)
                     if cached:
-                        # 更新帧引用, 避免每次新建
-                        result = cached.run()
+                        # v5.4: 传入 frame context, 避免 ProcessTask 重复截图
+                        result = cached.run(context={"frame": frame})
                         if result.action_taken:
                             with self._lock:
                                 self.stats["clicks"] += 1

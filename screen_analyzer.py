@@ -159,9 +159,6 @@ class ScreenAnalyzer:
         state.in_game = True
         now = time.time()
 
-        # v5.2: 预计算一次灰度图 (判定线扫描 + 上方扫描共用)
-        _cached_gray = None
-
         # ── [1] 判定线区域检测 (实时触发) ──
         for idx, lane_x in enumerate(self.all_lanes):
             active, note_type, confidence, details = self._detect_note_at(
